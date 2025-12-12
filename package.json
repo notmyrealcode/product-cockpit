@@ -1,0 +1,95 @@
+{
+  "name": "product-cockpit",
+  "displayName": "Product Cockpit",
+  "description": "Task management for AI coding agents",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pmcockpit",
+          "title": "Product Cockpit",
+          "icon": "$(tasklist)"
+        }
+      ]
+    },
+    "views": {
+      "pmcockpit": [
+        {
+          "id": "pmcockpit.tasks",
+          "name": "Tasks",
+          "when": "pmcockpit.initialized"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pmcockpit.initialize",
+        "title": "Product Cockpit: Initialize"
+      },
+      {
+        "command": "pmcockpit.addTask",
+        "title": "Add Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "pmcockpit.editTask",
+        "title": "Edit Task"
+      },
+      {
+        "command": "pmcockpit.setStatus",
+        "title": "Set Status"
+      },
+      {
+        "command": "pmcockpit.deleteTask",
+        "title": "Delete Task"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pmcockpit.addTask",
+          "when": "view == pmcockpit.tasks",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pmcockpit.editTask",
+          "when": "viewItem == task"
+        },
+        {
+          "command": "pmcockpit.setStatus",
+          "when": "viewItem == task"
+        },
+        {
+          "command": "pmcockpit.deleteTask",
+          "when": "viewItem == task"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0"
+  }
+}
