@@ -114,15 +114,9 @@ process.stdin.on('data', async (chunk) => {
 
 export async function initialize(workspaceRoot: string): Promise<boolean> {
     const choice = await vscode.window.showInformationMessage(
-        'Product Cockpit needs to set up files in your project:\n\n' +
-        '• .pmcockpit/tasks.json — Task queue storage\n' +
-        '• .pmcockpit/mcp-server.js — MCP server for Claude Code\n' +
-        '• docs/requirements/ — Requirements documents folder\n' +
-        '• .claude/settings.json — Tool permissions (merged)\n' +
-        '• .claude/mcp.json — MCP config (merged)',
+        'Product Cockpit will create task storage (.pmcockpit/), requirements folder (docs/requirements/), and Claude Code configuration (.claude/). Continue?',
         { modal: true },
-        'Initialize',
-        'Cancel'
+        'Initialize'
     );
 
     if (choice !== 'Initialize') {
