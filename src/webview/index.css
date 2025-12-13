@@ -1,12 +1,58 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Shepherd Design System - Primary Accent */
+  --color-primary: #3A6F74;
+  --color-primary-hover: #2D5A5E;
+
+  /* Shepherd Neutrals */
+  --color-neutral-0: #FFFFFF;
+  --color-neutral-50: #F8FAFC;
+  --color-neutral-100: #F1F5F9;
+  --color-neutral-200: #E2E8F0;
+  --color-neutral-300: #CBD5E1;
+  --color-neutral-400: #94A3B8;
+  --color-neutral-500: #64748B;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1E293B;
+  --color-neutral-900: #0F172A;
+
+  /* Shepherd Semantic Colors */
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+
+  /* Border radius */
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Shadows */
+  --shadow-drag: 0 4px 12px rgb(0 0 0 / 0.1);
+}
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
 
 body {
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  background-color: var(--color-neutral-0);
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.5;
   padding: 0;
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* VS Code dark theme support */
+body.vscode-dark {
+  background-color: var(--vscode-editor-background, var(--color-neutral-900));
+  color: var(--vscode-editor-foreground, var(--color-neutral-100));
+}
+
+body.vscode-light {
+  background-color: var(--vscode-editor-background, var(--color-neutral-0));
+  color: var(--vscode-editor-foreground, var(--color-neutral-800));
 }

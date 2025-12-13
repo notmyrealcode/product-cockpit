@@ -17,17 +17,32 @@
     "viewsContainers": {
       "activitybar": [
         {
+          "id": "pmcockpit-shortcut",
+          "title": "Product Cockpit",
+          "icon": "resources/icon.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
           "id": "pmcockpit",
           "title": "Product Cockpit",
-          "icon": "$(tasklist)"
+          "icon": "resources/icon.svg"
         }
       ]
     },
     "views": {
       "pmcockpit": [
         {
-          "id": "pmcockpit.tasks",
+          "type": "webview",
+          "id": "pmcockpit.taskView",
           "name": "Tasks",
+          "when": "pmcockpit.initialized"
+        }
+      ],
+      "pmcockpit-shortcut": [
+        {
+          "id": "pmcockpit.shortcutView",
+          "name": "Product Cockpit",
           "when": "pmcockpit.initialized"
         }
       ]
@@ -38,45 +53,42 @@
         "title": "Product Cockpit: Initialize"
       },
       {
-        "command": "pmcockpit.addTask",
-        "title": "Add Task",
-        "icon": "$(add)"
-      },
-      {
-        "command": "pmcockpit.editTask",
-        "title": "Edit Task"
-      },
-      {
-        "command": "pmcockpit.setStatus",
-        "title": "Set Status"
-      },
-      {
-        "command": "pmcockpit.deleteTask",
-        "title": "Delete Task"
+        "command": "pmcockpit.openSidebar",
+        "title": "Open Product Cockpit",
+        "icon": {
+          "light": "resources/icon.svg",
+          "dark": "resources/icon.svg"
+        }
       }
     ],
     "menus": {
-      "view/title": [
+      "editor/title": [
         {
-          "command": "pmcockpit.addTask",
-          "when": "view == pmcockpit.tasks",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "pmcockpit.editTask",
-          "when": "viewItem == task"
-        },
-        {
-          "command": "pmcockpit.setStatus",
-          "when": "viewItem == task"
-        },
-        {
-          "command": "pmcockpit.deleteTask",
-          "when": "viewItem == task"
+          "command": "pmcockpit.openSidebar",
+          "group": "navigation",
+          "when": "pmcockpit.initialized"
         }
       ]
+    },
+    "configuration": {
+      "title": "Product Cockpit",
+      "properties": {
+        "pmcockpit.parserModel": {
+          "type": "string",
+          "default": "haiku",
+          "description": "Claude model used for parsing voice and text input into tasks. Haiku is fast and cheap, Sonnet is more capable.",
+          "enum": [
+            "haiku",
+            "sonnet",
+            "opus"
+          ],
+          "enumDescriptions": [
+            "Haiku - Fast and cheap (recommended)",
+            "Sonnet - More capable, slower",
+            "Opus - Most capable, slowest"
+          ]
+        }
+      }
     }
   },
   "scripts": {
@@ -89,6 +101,7 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.10.0",
     "@types/react": "^19.2.7",

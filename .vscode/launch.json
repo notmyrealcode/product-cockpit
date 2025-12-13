@@ -7,7 +7,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "${workspaceFolder}/test-workspace"
+        "${env:HOME}/pmcockpit-test"
       ],
       "outFiles": [
         "${workspaceFolder}/out/**/*.js"

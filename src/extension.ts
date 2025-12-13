@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
 import { TaskStore } from './tasks/TaskStore';
-import { TaskProvider } from './tasks/TaskProvider';
+import { TaskWebviewProvider } from './webview/WebviewProvider';
 import { HttpBridge } from './http/bridge';
-import { initialize, isInitialized } from './init/initialize';
-import { TaskStatus } from './tasks/types';
+import { initialize, isInitialized, updateMcpServer } from './init/initialize';
 
 let taskStore: TaskStore | undefined;
-let taskProvider: TaskProvider | undefined;
+let webviewProvider: TaskWebviewProvider | undefined;
 let httpBridge: HttpBridge | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -28,6 +27,15 @@ export async function activate(context: vscode.ExtensionContext) {
     // Check if already initialized
     if (isInitialized(workspaceRoot)) {
         await activateExtension(context, workspaceRoot);
+    } else {
+        // Prompt user to initialize
+        const choice = await vscode.window.showInformationMessage(
+            'Product Cockpit is not initialized in this workspace.',
+            'Initialize Now'
+        );
+        if (choice === 'Initialize Now') {
+            vscode.commands.executeCommand('pmcockpit.initialize');
+        }
     }
 }
 
@@ -35,74 +43,56 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     // Set context for UI visibility
     vscode.commands.executeCommand('setContext', 'pmcockpit.initialized', true);
 
+    // Update MCP server to latest version (safe - it's stateless)
+    await updateMcpServer(workspaceRoot);
+
     // Initialize TaskStore
     taskStore = new TaskStore(workspaceRoot);
     await taskStore.load();
 
     // Initialize HTTP bridge
     httpBridge = new HttpBridge(taskStore, workspaceRoot, () => {
-        taskProvider?.refresh();
         vscode.window.showInformationMessage('Interview completed! Tasks and requirements refreshed.');
     });
     await httpBridge.start();
 
-    // Initialize TreeView
-    taskProvider = new TaskProvider(taskStore);
-    const treeView = vscode.window.createTreeView('pmcockpit.tasks', {
-        treeDataProvider: taskProvider,
-        dragAndDropController: taskProvider
-    });
+    // Initialize Webview Provider
+    webviewProvider = new TaskWebviewProvider(context.extensionUri, taskStore, workspaceRoot);
 
-    // Register commands
+    // Register webview provider and cleanup
     context.subscriptions.push(
-        treeView,
+        vscode.window.registerWebviewViewProvider(
+            TaskWebviewProvider.viewType,
+            webviewProvider
+        ),
+        webviewProvider,
         taskStore,
-        { dispose: () => httpBridge?.stop() },
+        { dispose: () => httpBridge?.stop() }
+    );
 
-        vscode.commands.registerCommand('pmcockpit.addTask', async () => {
-            const description = await vscode.window.showInputBox({
-                prompt: 'Enter task description',
-                placeHolder: 'What needs to be done?'
-            });
-            if (description) {
-                await taskStore!.addTask(description);
-            }
-        }),
-
-        vscode.commands.registerCommand('pmcockpit.editTask', async (item) => {
-            if (!item?.task) return;
-            const description = await vscode.window.showInputBox({
-                prompt: 'Edit task description',
-                value: item.task.description
-            });
-            if (description !== undefined) {
-                await taskStore!.updateTask(item.task.id, { description });
-            }
-        }),
-
-        vscode.commands.registerCommand('pmcockpit.setStatus', async (item) => {
-            if (!item?.task) return;
-            const statuses: TaskStatus[] = ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'];
-            const status = await vscode.window.showQuickPick(statuses, {
-                placeHolder: 'Select status'
-            });
-            if (status) {
-                await taskStore!.updateTask(item.task.id, { status: status as TaskStatus });
-            }
-        }),
-
-        vscode.commands.registerCommand('pmcockpit.deleteTask', async (item) => {
-            if (!item?.task) return;
-            const confirm = await vscode.window.showWarningMessage(
-                `Delete task "${item.task.description}"?`,
-                { modal: true },
-                'Delete'
-            );
-            if (confirm === 'Delete') {
-                await taskStore!.deleteTask(item.task.id);
-            }
+    // Register command to open sidebar (view is already in auxiliary bar via package.json)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('pmcockpit.openSidebar', async () => {
+            await vscode.commands.executeCommand('pmcockpit.taskView.focus');
         })
     );
+
+    // Create a tree view for the shortcut that auto-opens the main view
+    const shortcutTreeView = vscode.window.createTreeView('pmcockpit.shortcutView', {
+        treeDataProvider: {
+            getTreeItem: () => new vscode.TreeItem(''),
+            getChildren: () => []
+        }
+    });
+
+    shortcutTreeView.onDidChangeVisibility(e => {
+        if (e.visible) {
+            // Immediately focus the real view in secondary sidebar
+            vscode.commands.executeCommand('pmcockpit.taskView.focus');
+        }
+    });
+
+    context.subscriptions.push(shortcutTreeView);
 }
 
 export function deactivate() {

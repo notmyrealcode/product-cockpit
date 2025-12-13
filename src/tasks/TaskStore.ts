@@ -10,11 +10,16 @@ export class TaskStore {
     readonly onDidChange = this._onDidChange.event;
     private watcher: vscode.FileSystemWatcher | undefined;
     private saving = false;
+    private saveQueue: Promise<void> = Promise.resolve();
 
     constructor(private workspaceRoot: string) {}
 
     get tasksFilePath(): string {
         return path.join(this.workspaceRoot, '.pmcockpit', 'tasks.json');
+    }
+
+    get archiveFilePath(): string {
+        return path.join(this.workspaceRoot, '.pmcockpit', 'tasks-archive.json');
     }
 
     async load(): Promise<void> {
@@ -38,7 +43,13 @@ export class TaskStore {
         });
     }
 
-    private async save(): Promise<void> {
+    private save(): Promise<void> {
+        // Queue saves to prevent race conditions
+        this.saveQueue = this.saveQueue.then(() => this.doSave()).catch(() => this.doSave());
+        return this.saveQueue;
+    }
+
+    private async doSave(): Promise<void> {
         this.saving = true;
         try {
             const data: TasksFile = { version: 1, tasks: this.tasks };
@@ -64,10 +75,11 @@ export class TaskStore {
         return this.tasks.find(t => t.id === id) || null;
     }
 
-    async addTask(description: string, requirementPath?: string): Promise<Task> {
+    async addTask(title: string, description: string = '', requirementPath?: string): Promise<Task> {
         const now = new Date().toISOString();
         const task: Task = {
             id: uuidv4(),
+            title,
             description,
             status: 'todo',
             priority: this.tasks.length,
@@ -81,7 +93,7 @@ export class TaskStore {
         return task;
     }
 
-    async updateTask(id: string, updates: Partial<Pick<Task, 'description' | 'status' | 'requirementPath'>>): Promise<Task | null> {
+    async updateTask(id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'status' | 'requirementPath'>>): Promise<Task | null> {
         const task = this.tasks.find(t => t.id === id);
         if (!task) return null;
         Object.assign(task, updates, { updatedAt: new Date().toISOString() });
@@ -111,10 +123,67 @@ export class TaskStore {
         return true;
     }
 
+    public async reorderTasks(taskIds: string[]): Promise<void> {
+        const taskMap = new Map(this.tasks.map(t => [t.id, t]));
+        const reordered: Task[] = [];
+
+        for (let i = 0; i < taskIds.length; i++) {
+            const task = taskMap.get(taskIds[i]);
+            if (task) {
+                task.priority = i;
+                task.updatedAt = new Date().toISOString();
+                reordered.push(task);
+                taskMap.delete(taskIds[i]);
+            }
+        }
+
+        // Add any remaining tasks not in the reorder list
+        for (const task of taskMap.values()) {
+            reordered.push(task);
+        }
+
+        this.tasks = reordered;
+        this.recalculatePriorities();
+        await this.save();
+        this._onDidChange.fire();
+    }
+
     private recalculatePriorities(): void {
         this.tasks.forEach((task, index) => {
             task.priority = index;
         });
+    }
+
+    async archiveDoneTasks(): Promise<number> {
+        const doneTasks = this.tasks.filter(t => t.status === 'done');
+        if (doneTasks.length === 0) return 0;
+
+        // Load existing archive
+        let archive: TasksFile = { version: 1, tasks: [] };
+        try {
+            const content = await fs.promises.readFile(this.archiveFilePath, 'utf-8');
+            archive = JSON.parse(content);
+        } catch {
+            // Archive doesn't exist yet
+        }
+
+        // Add done tasks to archive (prepend so newest are first)
+        archive.tasks = [...doneTasks, ...archive.tasks];
+
+        // Save archive
+        await fs.promises.writeFile(this.archiveFilePath, JSON.stringify(archive, null, 2));
+
+        // Remove done tasks from active list
+        this.tasks = this.tasks.filter(t => t.status !== 'done');
+        this.recalculatePriorities();
+        await this.save();
+        this._onDidChange.fire();
+
+        return doneTasks.length;
+    }
+
+    getDoneCount(): number {
+        return this.tasks.filter(t => t.status === 'done').length;
     }
 
     dispose(): void {

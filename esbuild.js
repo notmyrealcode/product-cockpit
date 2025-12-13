@@ -1,14 +1,13 @@
 const esbuild = require('esbuild');
 const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
-// Build Tailwind CSS
+// Build Tailwind CSS using Tailwind CLI v4
 function buildTailwind() {
-  execSync('npx postcss ./src/webview/index.css -o ./out/webview/index.css', {
+  execSync('npx @tailwindcss/cli -i ./src/webview/index.css -o ./out/webview/webview.css', {
     stdio: 'inherit',
   });
 }
@@ -26,6 +25,11 @@ async function buildWebview() {
     sourcemap: !production,
     define: {
       'process.env.NODE_ENV': production ? '"production"' : '"development"',
+    },
+    // Don't bundle CSS - we handle it separately with Tailwind CLI
+    external: ['*.css'],
+    loader: {
+      '.css': 'empty',
     },
   });
 

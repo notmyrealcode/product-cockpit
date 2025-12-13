@@ -53,10 +53,16 @@ async function callBridge(method, endpoint, body) {
 }
 
 const tools = {
-    get_next_task: async () => callBridge('GET', '/tasks/next'),
+    list_tasks: async ({ limit, status }) => {
+        const params = new URLSearchParams();
+        if (limit) params.set('limit', String(limit));
+        if (status) params.set('status', status);
+        const query = params.toString();
+        return callBridge('GET', '/tasks' + (query ? '?' + query : ''));
+    },
     get_task: async ({ task_id }) => callBridge('GET', \`/tasks/\${task_id}\`),
     update_task_status: async ({ task_id, status }) => callBridge('PATCH', \`/tasks/\${task_id}/status\`, { status }),
-    create_task: async ({ description, requirementPath }) => callBridge('POST', '/tasks', { description, requirementPath }),
+    create_task: async ({ title, description, requirementPath }) => callBridge('POST', '/tasks', { title, description, requirementPath }),
     list_requirements: async () => callBridge('GET', '/requirements'),
     get_requirements_path: async () => callBridge('GET', '/requirements/path'),
     get_task_requirement: async ({ task_id }) => callBridge('GET', \`/tasks/\${task_id}/requirement\`),
@@ -65,10 +71,10 @@ const tools = {
 };
 
 const toolDefinitions = [
-    { name: 'get_next_task', description: 'Get the highest-priority todo task', inputSchema: { type: 'object', properties: {} } },
+    { name: 'list_tasks', description: 'List tasks sorted by priority. Use limit=1 and status=todo to get the next task to work on.', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: 'Max number of tasks to return' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'], description: 'Filter by status' } } } },
     { name: 'get_task', description: 'Get a task by ID', inputSchema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
-    { name: 'update_task_status', description: 'Update task status', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'] } }, required: ['task_id', 'status'] } },
-    { name: 'create_task', description: 'Create a new task', inputSchema: { type: 'object', properties: { description: { type: 'string' }, requirementPath: { type: 'string' } }, required: ['description'] } },
+    { name: 'update_task_status', description: 'Update task status. Use ready-for-signoff when work is complete (PM will review and mark done).', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'], description: 'todo=not started, in-progress=working, ready-for-signoff=complete awaiting review, done=approved, rework=needs changes' } }, required: ['task_id', 'status'] } },
+    { name: 'create_task', description: 'Create a new task', inputSchema: { type: 'object', properties: { title: { type: 'string', description: 'Short task title' }, description: { type: 'string', description: 'Detailed task description' }, requirementPath: { type: 'string' } }, required: ['title'] } },
     { name: 'list_requirements', description: 'List all requirement files', inputSchema: { type: 'object', properties: {} } },
     { name: 'get_requirements_path', description: 'Get the requirements folder path', inputSchema: { type: 'object', properties: {} } },
     { name: 'get_task_requirement', description: 'Get the requirement path for a task', inputSchema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
@@ -143,8 +149,8 @@ export async function initialize(workspaceRoot: string): Promise<boolean> {
     // Merge .claude/settings.json
     await mergeClaudeSettings(claudeDir);
 
-    // Merge .claude/mcp.json
-    await mergeClaudeMcp(claudeDir);
+    // Create/merge .mcp.json at project root for Claude Code MCP integration
+    await mergeClaudeMcp(workspaceRoot);
 
     vscode.window.showInformationMessage('Product Cockpit initialized successfully!');
     return true;
@@ -161,31 +167,31 @@ async function mergeClaudeSettings(claudeDir: string): Promise<void> {
         // File doesn't exist
     }
 
-    const allowedTools = (settings.allowedTools as string[]) || [];
-    const mcpTools = [
-        'mcp__pmcockpit__get_next_task',
-        'mcp__pmcockpit__get_task',
-        'mcp__pmcockpit__update_task_status',
-        'mcp__pmcockpit__create_task',
-        'mcp__pmcockpit__create_requirement',
-        'mcp__pmcockpit__complete_interview',
-        'mcp__pmcockpit__list_requirements',
-        'mcp__pmcockpit__get_requirements_path',
-        'mcp__pmcockpit__get_task_requirement'
-    ];
+    // Claude Code uses permissions.allow format
+    const permissions = (settings.permissions as Record<string, unknown>) || {};
+    const allow = (permissions.allow as string[]) || [];
+    const mcpPermission = 'mcp__pmcockpit';
 
-    for (const tool of mcpTools) {
-        if (!allowedTools.includes(tool)) {
-            allowedTools.push(tool);
-        }
+    if (!allow.includes(mcpPermission)) {
+        allow.push(mcpPermission);
     }
 
-    settings.allowedTools = allowedTools;
+    permissions.allow = allow;
+    settings.permissions = permissions;
+
+    // Auto-enable the pmcockpit MCP server
+    const enabledServers = (settings.enabledMcpjsonServers as string[]) || [];
+    if (!enabledServers.includes('pmcockpit')) {
+        enabledServers.push('pmcockpit');
+    }
+    settings.enabledMcpjsonServers = enabledServers;
+
     await fs.promises.writeFile(settingsFile, JSON.stringify(settings, null, 2));
 }
 
-async function mergeClaudeMcp(claudeDir: string): Promise<void> {
-    const mcpFile = path.join(claudeDir, 'mcp.json');
+async function mergeClaudeMcp(workspaceRoot: string): Promise<void> {
+    // Claude Code expects .mcp.json at the project root (not .claude/mcp.json)
+    const mcpFile = path.join(workspaceRoot, '.mcp.json');
     let mcp: Record<string, unknown> = {};
 
     try {
@@ -196,11 +202,22 @@ async function mergeClaudeMcp(claudeDir: string): Promise<void> {
     }
 
     const mcpServers = (mcp.mcpServers as Record<string, unknown>) || {};
-    mcpServers.pmcockpit = {
+    const expectedConfig = {
         command: 'node',
         args: ['.pmcockpit/mcp-server.js']
     };
 
+    // Check if pmcockpit is already configured correctly
+    const existing = mcpServers.pmcockpit as Record<string, unknown> | undefined;
+    if (existing &&
+        existing.command === expectedConfig.command &&
+        JSON.stringify(existing.args) === JSON.stringify(expectedConfig.args)) {
+        // Already configured correctly, no need to update
+        return;
+    }
+
+    // Add or update pmcockpit config
+    mcpServers.pmcockpit = expectedConfig;
     mcp.mcpServers = mcpServers;
     await fs.promises.writeFile(mcpFile, JSON.stringify(mcp, null, 2));
 }
@@ -208,4 +225,23 @@ async function mergeClaudeMcp(claudeDir: string): Promise<void> {
 export function isInitialized(workspaceRoot: string): boolean {
     const tasksFile = path.join(workspaceRoot, '.pmcockpit', 'tasks.json');
     return fs.existsSync(tasksFile);
+}
+
+/**
+ * Updates the MCP server file to the latest version and ensures .mcp.json exists.
+ * Called on every extension activation for initialized workspaces.
+ * Safe to overwrite since the MCP server is stateless.
+ */
+export async function updateMcpServer(workspaceRoot: string): Promise<void> {
+    try {
+        // Update MCP server script
+        const mcpServerFile = path.join(workspaceRoot, '.pmcockpit', 'mcp-server.js');
+        await fs.promises.writeFile(mcpServerFile, MCP_SERVER_TEMPLATE);
+
+        // Ensure .mcp.json exists at project root
+        await mergeClaudeMcp(workspaceRoot);
+    } catch (err) {
+        // Log but don't fail - workspace might be read-only
+        console.error('Failed to update MCP server:', err);
+    }
 }

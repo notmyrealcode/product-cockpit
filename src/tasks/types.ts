@@ -2,6 +2,7 @@ export type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' |
 
 export interface Task {
     id: string;
+    title: string;
     description: string;
     status: TaskStatus;
     priority: number;

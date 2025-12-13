@@ -11,6 +11,9 @@ Product Cockpit is a VS Code extension that provides product managers with a vis
 - Requirements authoring via Claude Code interview
 - MCP server integration for AI agent task coordination
 
+# Design
+Please refer to @docs/design_style_guide.md 
+
 # Making Updates
 1. Commit to git (no author names in commit messages)
 2. Update `docs/TECH.md` for architectural changes only

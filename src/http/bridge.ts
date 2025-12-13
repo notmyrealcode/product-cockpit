@@ -49,7 +49,7 @@ export class HttpBridge {
 
         try {
             const body = await this.readBody(req);
-            const result = await this.route(method, pathname, body);
+            const result = await this.route(method, pathname, body, url.searchParams);
             res.writeHead(200);
             res.end(JSON.stringify(result));
         } catch (err) {
@@ -72,7 +72,24 @@ export class HttpBridge {
         });
     }
 
-    private async route(method: string, pathname: string, body: Record<string, unknown>): Promise<unknown> {
+    private async route(method: string, pathname: string, body: Record<string, unknown>, searchParams: URLSearchParams): Promise<unknown> {
+        // GET /tasks - list tasks with optional filters
+        if (method === 'GET' && pathname === '/tasks') {
+            let tasks = this.taskStore.getTasks();
+
+            const status = searchParams.get('status');
+            if (status) {
+                tasks = tasks.filter(t => t.status === status);
+            }
+
+            const limit = searchParams.get('limit');
+            if (limit) {
+                tasks = tasks.slice(0, parseInt(limit, 10));
+            }
+
+            return { tasks };
+        }
+
         // GET /tasks/next
         if (method === 'GET' && pathname === '/tasks/next') {
             return this.taskStore.getNextTodo();
@@ -93,9 +110,10 @@ export class HttpBridge {
 
         // POST /tasks
         if (method === 'POST' && pathname === '/tasks') {
-            const description = body.description as string;
+            const title = body.title as string;
+            const description = (body.description as string) || '';
             const requirementPath = body.requirementPath as string | undefined;
-            return this.taskStore.addTask(description, requirementPath);
+            return this.taskStore.addTask(title, description, requirementPath);
         }
 
         // GET /requirements

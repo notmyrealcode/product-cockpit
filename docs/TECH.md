@@ -2,26 +2,41 @@
 
 ## Overview
 
-VS Code extension with TreeView UI and MCP server for Claude Code task management.
+VS Code extension with React Webview UI and MCP server for Claude Code task management.
 
 ## Components
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   TreeView UI   │────▶│   TaskStore     │◀────│   MCP Server    │
-│  (TaskProvider) │     │  (single source │     │  (via HTTP)     │
+│  React Webview  │────▶│   TaskStore     │◀────│   MCP Server    │
+│   (sidebar)     │     │  (single source │     │  (via HTTP)     │
 └─────────────────┘     │   of truth)     │     └─────────────────┘
-                        └────────┬────────┘
-                                 │
-                                 ▼
-                        .pmcockpit/tasks.json
+        ▲               └────────┬────────┘
+        │                        │
+   postMessage                   ▼
+        │               .pmcockpit/tasks.json
+        ▼
+┌─────────────────┐
+│ WebviewProvider │
+└─────────────────┘
 ```
 
 ### TaskStore (`src/tasks/TaskStore.ts`)
 Single source of truth for tasks. Emits `onDidChange` event on mutations. Watches file for external changes.
 
-### TaskProvider (`src/tasks/TaskProvider.ts`)
-TreeDataProvider + TreeDragAndDropController for VS Code sidebar. Subscribes to TaskStore changes.
+### WebviewProvider (`src/webview/WebviewProvider.ts`)
+Implements `WebviewViewProvider` for VS Code sidebar. Handles message passing between webview and TaskStore.
+
+### React Webview (`src/webview/`)
+React 18 application bundled with esbuild. Uses Tailwind CSS v4 for styling.
+
+Key components:
+- `App.tsx` - Main app, manages task state and message handlers
+- `TaskList.tsx` - Drag-and-drop task list using @dnd-kit
+- `TaskCard.tsx` - Individual task card with inline editing
+- `AddTaskForm.tsx` - Form to create new tasks with title + description
+- `VoiceCapture.tsx` - Voice recording with MediaRecorder API
+- `RequirementsList.tsx` - Requirements browser with interview trigger
 
 ### HttpBridge (`src/http/bridge.ts`)
 Localhost HTTP server on random port. Writes port to `.pmcockpit/.port`. Routes MCP tool calls to TaskStore.
@@ -29,30 +44,86 @@ Localhost HTTP server on random port. Writes port to `.pmcockpit/.port`. Routes 
 ### MCP Server (`.pmcockpit/mcp-server.js`)
 Standalone stdio server spawned by Claude Code. Reads port file, proxies JSON-RPC to HTTP bridge.
 
+## UI Architecture
+
+### Tech Stack
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **Tailwind CSS v4** - Utility-first styling with `@theme` directive
+- **@dnd-kit** - Drag-and-drop reordering
+- **Lucide React** - Icons
+- **esbuild** - Bundling
+
+### Design System (Shepherd)
+Minimal, Linear-inspired aesthetic:
+- Primary: `#3A6F74` (teal)
+- Neutrals: 11-step grayscale from white to near-black
+- Semantic colors: success, warning, danger
+
+### Build Pipeline
+```bash
+npm run compile          # TypeScript + webview bundle
+npm run build:webview    # Webview only
+npm run watch            # Watch mode for both
+```
+
+CSS is built separately using `@tailwindcss/cli` to handle v4 syntax.
+
 ## Data Flow
 
-1. User/Claude Code initiates action
-2. TreeView command or MCP tool call
-3. TaskStore mutates state and saves
-4. `onDidChange` fires
-5. TreeView refreshes
+### User Actions
+1. User interacts with webview (click, drag, type)
+2. Webview sends message via `vscode.postMessage()`
+3. WebviewProvider receives message and calls TaskStore
+4. TaskStore mutates state and saves to disk
+5. `onDidChange` fires
+6. WebviewProvider sends `tasksUpdated` message
+7. Webview updates React state
+
+### MCP/Claude Actions
+1. Claude Code calls MCP tool
+2. MCP server proxies to HTTP bridge
+3. HTTP bridge calls TaskStore method
+4. TaskStore saves and emits change
+5. WebviewProvider notifies webview
+
+## Task Model
+
+```typescript
+interface Task {
+  id: string;           // UUID
+  title: string;        // Short task title
+  description: string;  // Detailed description
+  status: TaskStatus;   // todo | in-progress | ready-for-signoff | done | rework
+  priority: number;     // Order in list (0 = highest)
+  requirementPath?: string;  // Path to requirement doc
+  createdAt: string;    // ISO timestamp
+  updatedAt: string;    // ISO timestamp
+}
+```
 
 ## File Locations
 
 | File | Purpose |
 |------|---------|
 | `.pmcockpit/tasks.json` | Task data |
+| `.pmcockpit/tasks-archive.json` | Archived done tasks |
 | `.pmcockpit/mcp-server.js` | MCP server |
 | `.pmcockpit/.port` | HTTP bridge port |
+| `.pmcockpit/whisper/config.json` | Selected model config |
+| `.pmcockpit/whisper/models/*.bin` | Downloaded Whisper models |
+| `.pmcockpit/whisper/bin/` | whisper.cpp binary (Windows) |
 | `docs/requirements/*.md` | Requirement docs |
-| `.claude/mcp.json` | MCP config |
-| `.claude/settings.json` | Tool permissions |
+| `.mcp.json` | Claude Code MCP server config |
+| `.claude/settings.json` | Claude Code tool permissions |
+| `out/webview/webview.js` | Bundled React app |
+| `out/webview/webview.css` | Compiled Tailwind CSS |
 
 ## MCP Tools
 
 | Tool | Description |
 |------|-------------|
-| `get_next_task` | Returns highest-priority todo task |
+| `list_tasks` | Lists tasks with optional `limit` and `status` filters |
 | `get_task` | Returns task by ID |
 | `update_task_status` | Updates task status |
 | `create_task` | Creates new task |
@@ -61,3 +132,51 @@ Standalone stdio server spawned by Claude Code. Reads port file, proxies JSON-RP
 | `get_task_requirement` | Returns requirement path for task |
 | `create_requirement` | Creates requirement file |
 | `complete_interview` | Signals interview completion |
+
+## Voice Capture
+
+Flow: Recording → Transcription → Task Parsing → Review → Add
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ AudioRecorder│────▶│ whisper.cpp │────▶│ claude --print│────▶│ Review UI   │
+│ (sox/arecord)│     │ (local)     │     │ (parse JSON) │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+VS Code webviews can't access `navigator.mediaDevices.getUserMedia()`, so recording happens on the extension side using system tools.
+
+### AudioRecorder (`src/voice/AudioRecorder.ts`)
+Records audio using system command-line tools:
+- **macOS/Windows**: sox (`brew install sox`)
+- **Linux**: arecord (alsa-utils) or sox
+
+Records mono 16kHz WAV files optimized for speech recognition.
+
+### WhisperService (`src/voice/WhisperService.ts`)
+Manages whisper.cpp binary with smart detection:
+- Checks if already installed (`which whisper`, common paths)
+- **macOS**: Offers Homebrew, MacPorts, or build from source
+- **Windows**: Downloads pre-built binary from GitHub releases
+- **Linux**: Offers build from source
+
+### Model Options
+| Model | Size | Use Case |
+|-------|------|----------|
+| tiny | 75 MB | Quick notes, fastest |
+| base | 142 MB | Balanced (recommended) |
+| small | 466 MB | Better accuracy |
+| medium | 1.5 GB | Best accuracy, slowest |
+
+Models downloaded from Hugging Face on first use. Stored in `.pmcockpit/whisper/models/`.
+
+### Message Flow
+1. Webview sends `startRecording` message
+2. Extension starts sox/arecord via AudioRecorder
+3. Extension sends `recordingStarted` to webview (UI shows timer)
+4. User clicks stop → webview sends `stopRecording`
+5. Extension stops recording, sends `recordingStopped`
+6. WhisperService transcribes locally
+7. Transcript parsed to tasks via `claude --print -p`
+8. Extension sends `voiceTranscribed` with parsed tasks
+9. Webview shows review UI → user confirms → tasks added
