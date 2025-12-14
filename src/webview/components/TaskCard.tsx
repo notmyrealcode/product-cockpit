@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Pencil, Check, X, ChevronDown, Play } from 'lucide-react';
+import { GripVertical, Trash2, Pencil, Check, X, ChevronDown, Play, Bug } from 'lucide-react';
 import { Button } from './ui';
 import { cn } from '../lib/utils';
 import type { Task, TaskStatus } from '../types';
@@ -198,6 +198,9 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
           <div className="flex-1 min-w-0">
             {/* Task title */}
             <div className="flex items-center gap-2">
+              {task.type === 'bug' && (
+                <Bug size={14} className="text-danger flex-shrink-0" title="Bug" />
+              )}
               <p
                 className="text-sm font-semibold text-neutral-800 leading-snug cursor-pointer hover:text-primary"
                 onClick={handleStartEdit}

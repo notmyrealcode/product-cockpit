@@ -1,11 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { vscode } from './lib/vscode';
 import { TaskList } from './components/TaskList';
+import { FeatureSection } from './components/FeatureSection';
 import { AddTaskForm } from './components/AddTaskForm';
 import { VoiceCapture } from './components/VoiceCapture';
 import { RequirementsList } from './components/RequirementsList';
 import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings } from 'lucide-react';
+import { Play, ChevronDown, ChevronRight, X, Settings, Plus } from 'lucide-react';
 import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage } from './types';
 
 const PARSER_MODELS = [
@@ -13,6 +31,17 @@ const PARSER_MODELS = [
   { id: 'sonnet', name: 'Sonnet', description: 'Balanced' },
   { id: 'opus', name: 'Opus', description: 'Most capable' },
 ];
+
+// Virtual feature for ungrouped tasks
+const UNGROUPED_FEATURE: Feature = {
+  id: '__ungrouped__',
+  title: 'Ungrouped',
+  description: null,
+  requirement_path: null,
+  priority: 999999,
+  created_at: '',
+  updated_at: '',
+};
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -23,10 +52,55 @@ export default function App() {
   const [archiveExpanded, setArchiveExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [parserModel, setParserModel] = useState('haiku');
+  const [showAddFeature, setShowAddFeature] = useState(false);
+  const [newFeatureTitle, setNewFeatureTitle] = useState('');
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   // Split tasks into active and done
   const activeTasks = tasks.filter(t => t.status !== 'done');
   const doneTasks = tasks.filter(t => t.status === 'done');
+
+  // Group active tasks by feature
+  const tasksByFeature = useMemo(() => {
+    const grouped = new Map<string, Task[]>();
+    // Initialize with all features (even empty ones)
+    features.forEach(f => grouped.set(f.id, []));
+    grouped.set(UNGROUPED_FEATURE.id, []);
+
+    activeTasks.forEach(task => {
+      const featureId = task.feature_id || UNGROUPED_FEATURE.id;
+      const existing = grouped.get(featureId) || [];
+      existing.push(task);
+      grouped.set(featureId, existing);
+    });
+
+    // Sort tasks within each feature by priority
+    grouped.forEach((tasks, key) => {
+      grouped.set(key, tasks.sort((a, b) => a.priority - b.priority));
+    });
+
+    return grouped;
+  }, [features, activeTasks]);
+
+  // All draggable items (features + tasks)
+  const allDraggableIds = useMemo(() => {
+    const ids: string[] = [];
+    features.forEach(f => {
+      ids.push(f.id);
+      const featureTasks = tasksByFeature.get(f.id) || [];
+      featureTasks.forEach(t => ids.push(t.id));
+    });
+    // Add ungrouped tasks
+    const ungroupedTasks = tasksByFeature.get(UNGROUPED_FEATURE.id) || [];
+    ungroupedTasks.forEach(t => ids.push(t.id));
+    return ids;
+  }, [features, tasksByFeature]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<ExtensionMessage>) => {
@@ -159,6 +233,101 @@ export default function App() {
     vscode.postMessage({ type: 'setParserModel', model });
   };
 
+  // Feature handlers
+  const handleAddFeature = () => {
+    if (!newFeatureTitle.trim()) return;
+    vscode.postMessage({ type: 'addFeature', title: newFeatureTitle.trim() });
+    setNewFeatureTitle('');
+    setShowAddFeature(false);
+  };
+
+  const handleFeatureEdit = (id: string, title: string, description: string) => {
+    vscode.postMessage({ type: 'updateFeature', id, updates: { title, description: description || null } });
+  };
+
+  const handleFeatureDelete = (id: string) => {
+    vscode.postMessage({ type: 'deleteFeature', id });
+  };
+
+  const handleBuildFeature = (featureId: string) => {
+    if (buildInProgress) return;
+    const featureTasks = tasksByFeature.get(featureId) || [];
+    const todoTasks = featureTasks.filter(t => t.status === 'todo' || t.status === 'in-progress');
+    if (todoTasks.length === 0) return;
+    vscode.postMessage({ type: 'buildTasks', taskIds: todoTasks.map(t => t.id) });
+  };
+
+  // Drag handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    // Check if dragging a task
+    if (tasks.some(t => t.id === active.id)) {
+      setActiveTaskId(active.id as string);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTaskId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // Check what we're dragging
+    const draggedTask = tasks.find(t => t.id === activeId);
+    const draggedFeature = features.find(f => f.id === activeId);
+
+    if (draggedTask) {
+      // Dragging a task
+      const overTask = tasks.find(t => t.id === overId);
+      const overFeature = features.find(f => f.id === overId);
+
+      if (overTask) {
+        // Dropping on another task - reorder within same feature or move to new feature
+        const targetFeatureId = overTask.feature_id;
+        if (draggedTask.feature_id !== targetFeatureId) {
+          // Move to different feature
+          vscode.postMessage({
+            type: 'moveTask',
+            taskId: draggedTask.id,
+            featureId: targetFeatureId
+          });
+        }
+        // Reorder tasks
+        const featureTasks = tasksByFeature.get(targetFeatureId || UNGROUPED_FEATURE.id) || [];
+        const oldIndex = featureTasks.findIndex(t => t.id === activeId);
+        const newIndex = featureTasks.findIndex(t => t.id === overId);
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(featureTasks, oldIndex, newIndex);
+          vscode.postMessage({ type: 'reorderTasks', taskIds: newOrder.map(t => t.id) });
+        }
+      } else if (overFeature || overId === UNGROUPED_FEATURE.id) {
+        // Dropping on a feature header - move task to that feature
+        const newFeatureId = overId === UNGROUPED_FEATURE.id ? null : overId;
+        if (draggedTask.feature_id !== newFeatureId) {
+          vscode.postMessage({
+            type: 'moveTask',
+            taskId: draggedTask.id,
+            featureId: newFeatureId
+          });
+        }
+      }
+    } else if (draggedFeature) {
+      // Dragging a feature - reorder features
+      const overFeature = features.find(f => f.id === overId);
+      if (overFeature) {
+        const oldIndex = features.findIndex(f => f.id === activeId);
+        const newIndex = features.findIndex(f => f.id === overId);
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(features, oldIndex, newIndex);
+          vscode.postMessage({ type: 'reorderFeatures', featureIds: newOrder.map(f => f.id) });
+        }
+      }
+    }
+  };
+
   return (
     // Shepherd: Section padding p-6, backgrounds neutral-0/50/100
     <div className="p-4 min-h-screen bg-neutral-50">
@@ -221,7 +390,48 @@ export default function App() {
         </div>
       )}
 
-      <AddTaskForm onAdd={handleAddTask} />
+      {/* Add Task / Feature buttons */}
+      <div className="flex gap-2 mb-4">
+        <div className="flex-1">
+          <AddTaskForm onAdd={handleAddTask} />
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setShowAddFeature(!showAddFeature)}
+          className="h-9 px-3 text-xs whitespace-nowrap"
+        >
+          <Plus size={14} className="mr-1" />
+          Feature
+        </Button>
+      </div>
+
+      {/* Add Feature form */}
+      {showAddFeature && (
+        <div className="mb-4 p-3 bg-neutral-0 border border-neutral-200 rounded-lg">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newFeatureTitle}
+              onChange={(e) => setNewFeatureTitle(e.target.value)}
+              placeholder="Feature name..."
+              className="flex-1 text-sm bg-neutral-0 border border-neutral-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddFeature();
+                if (e.key === 'Escape') setShowAddFeature(false);
+              }}
+            />
+            <Button size="sm" onClick={handleAddFeature} disabled={!newFeatureTitle.trim()}>
+              Add
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowAddFeature(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <VoiceCapture onTasksCreated={handleVoiceTasksCreated} />
 
       {/* Selection actions bar */}
@@ -270,18 +480,62 @@ export default function App() {
         </div>
       )}
 
-      <TaskList
-        tasks={activeTasks}
-        selectedIds={selectedTaskIds}
-        buildDisabled={buildInProgress}
-        onSelect={handleSelectTask}
-        onBuild={handleBuildTask}
-        onReorder={handleReorder}
-        onStatusChange={handleStatusChange}
-        onTitleChange={handleTitleChange}
-        onDescriptionChange={handleDescriptionChange}
-        onDelete={handleDelete}
-      />
+      {/* Features and tasks with drag-and-drop */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={allDraggableIds} strategy={verticalListSortingStrategy}>
+          <div className="space-y-4">
+            {/* Features */}
+            {features.map((feature) => (
+              <FeatureSection
+                key={feature.id}
+                feature={feature}
+                tasks={tasksByFeature.get(feature.id) || []}
+                selectedIds={selectedTaskIds}
+                buildDisabled={buildInProgress}
+                onSelectTask={handleSelectTask}
+                onBuildTask={handleBuildTask}
+                onBuildFeature={handleBuildFeature}
+                onTaskStatusChange={handleStatusChange}
+                onTaskTitleChange={handleTitleChange}
+                onTaskDescriptionChange={handleDescriptionChange}
+                onTaskDelete={handleDelete}
+                onFeatureEdit={handleFeatureEdit}
+                onFeatureDelete={handleFeatureDelete}
+              />
+            ))}
+
+            {/* Ungrouped tasks */}
+            {(tasksByFeature.get(UNGROUPED_FEATURE.id)?.length ?? 0) > 0 && (
+              <FeatureSection
+                feature={UNGROUPED_FEATURE}
+                tasks={tasksByFeature.get(UNGROUPED_FEATURE.id) || []}
+                selectedIds={selectedTaskIds}
+                buildDisabled={buildInProgress}
+                isUngrouped
+                onSelectTask={handleSelectTask}
+                onBuildTask={handleBuildTask}
+                onTaskStatusChange={handleStatusChange}
+                onTaskTitleChange={handleTitleChange}
+                onTaskDescriptionChange={handleDescriptionChange}
+                onTaskDelete={handleDelete}
+              />
+            )}
+
+            {/* Empty state */}
+            {features.length === 0 && activeTasks.length === 0 && (
+              <div className="text-center py-12 border border-dashed border-neutral-200 rounded-lg bg-neutral-0">
+                <p className="text-sm text-neutral-500">No tasks or features yet</p>
+                <p className="text-xs text-neutral-400 mt-1">Add a task or create a feature to get started</p>
+              </div>
+            )}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Archive section for done tasks */}
       {doneTasks.length > 0 && (
