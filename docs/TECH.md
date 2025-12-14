@@ -14,15 +14,30 @@ VS Code extension with React Webview UI and MCP server for Claude Code task mana
         ▲               └────────┬────────┘
         │                        │
    postMessage                   ▼
-        │               .pmcockpit/tasks.json
-        ▼
-┌─────────────────┐
-│ WebviewProvider │
-└─────────────────┘
+        │               ┌────────────────┐
+        ▼               │  Repositories  │
+┌─────────────────┐     └────────┬───────┘
+│ WebviewProvider │              │
+└─────────────────┘              ▼
+                        .pmcockpit/data.db (SQLite via sql.js)
 ```
 
+### Database (`src/db/`)
+SQLite database using sql.js (WASM). No native dependencies.
+
+**Schema:**
+- `project` - Singleton project metadata
+- `features` - Feature containers for grouping tasks
+- `tasks` - Tasks with optional feature_id foreign key
+- `requirement_sessions` - Interview state tracking (future)
+
+### Repositories (`src/db/repositories/`)
+- `ProjectRepo` - Project CRUD
+- `FeatureRepo` - Feature CRUD with reordering
+- `TaskRepo` - Task CRUD with feature relationships
+
 ### TaskStore (`src/tasks/TaskStore.ts`)
-Single source of truth for tasks. Emits `onDidChange` event on mutations. Watches file for external changes.
+Wraps repositories. Emits `onDidChange` event on mutations.
 
 ### WebviewProvider (`src/webview/WebviewProvider.ts`)
 Implements `WebviewViewProvider` for VS Code sidebar. Handles message passing between webview and TaskStore.
@@ -87,27 +102,49 @@ CSS is built separately using `@tailwindcss/cli` to handle v4 syntax.
 4. TaskStore saves and emits change
 5. WebviewProvider notifies webview
 
-## Task Model
+## Data Model
 
 ```typescript
+interface Project {
+  id: string;               // 'main' singleton
+  title: string | null;
+  description: string | null;
+  requirement_path: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Feature {
+  id: string;               // UUID
+  title: string;
+  description: string | null;
+  requirement_path: string | null;  // Links to docs/requirements/*.md
+  priority: number;         // Order (0 = highest)
+  created_at: string;
+  updated_at: string;
+}
+
 interface Task {
-  id: string;           // UUID
-  title: string;        // Short task title
-  description: string;  // Detailed description
-  status: TaskStatus;   // todo | in-progress | ready-for-signoff | done | rework
-  priority: number;     // Order in list (0 = highest)
-  requirementPath?: string;  // Path to requirement doc
-  createdAt: string;    // ISO timestamp
-  updatedAt: string;    // ISO timestamp
+  id: string;               // UUID
+  feature_id: string | null;  // Optional feature link
+  type: 'task' | 'bug';
+  title: string;
+  description: string | null;
+  status: TaskStatus;       // todo | in-progress | ready-for-signoff | done | rework
+  priority: number;         // Order (0 = highest)
+  created_at: string;
+  updated_at: string;
 }
 ```
+
+**Hierarchy:** Project → Features → Tasks (one level deep)
 
 ## File Locations
 
 | File | Purpose |
 |------|---------|
-| `.pmcockpit/tasks.json` | Task data |
-| `.pmcockpit/tasks-archive.json` | Archived done tasks |
+| `.pmcockpit/data.db` | SQLite database (sql.js) |
+| `.pmcockpit/.initialized` | Initialization marker |
 | `.pmcockpit/mcp-server.js` | MCP server |
 | `.pmcockpit/.port` | HTTP bridge port |
 | `.pmcockpit/whisper/config.json` | Selected model config |
@@ -123,13 +160,16 @@ interface Task {
 
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | Lists tasks with optional `limit` and `status` filters |
+| `list_tasks` | Lists tasks with optional `limit`, `status`, `feature_id` filters |
 | `get_task` | Returns task by ID |
 | `update_task_status` | Updates task status |
-| `create_task` | Creates new task |
+| `create_task` | Creates new task with optional `feature_id` and `type` |
+| `list_features` | Lists all features |
+| `get_feature` | Returns feature by ID |
+| `create_feature` | Creates new feature |
 | `list_requirements` | Lists requirement files |
 | `get_requirements_path` | Returns requirements folder path |
-| `get_task_requirement` | Returns requirement path for task |
+| `get_task_requirement` | Returns requirement path for task (via feature) |
 | `create_requirement` | Creates requirement file |
 | `complete_interview` | Signals interview completion |
 

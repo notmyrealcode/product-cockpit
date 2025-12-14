@@ -53,16 +53,20 @@ async function callBridge(method, endpoint, body) {
 }
 
 const tools = {
-    list_tasks: async ({ limit, status }) => {
+    list_tasks: async ({ limit, status, feature_id }) => {
         const params = new URLSearchParams();
         if (limit) params.set('limit', String(limit));
         if (status) params.set('status', status);
+        if (feature_id) params.set('feature_id', feature_id);
         const query = params.toString();
         return callBridge('GET', '/tasks' + (query ? '?' + query : ''));
     },
     get_task: async ({ task_id }) => callBridge('GET', \`/tasks/\${task_id}\`),
     update_task_status: async ({ task_id, status }) => callBridge('PATCH', \`/tasks/\${task_id}/status\`, { status }),
-    create_task: async ({ title, description, requirementPath }) => callBridge('POST', '/tasks', { title, description, requirementPath }),
+    create_task: async ({ title, description, feature_id, type }) => callBridge('POST', '/tasks', { title, description, feature_id, type }),
+    list_features: async () => callBridge('GET', '/features'),
+    get_feature: async ({ feature_id }) => callBridge('GET', \`/features/\${feature_id}\`),
+    create_feature: async ({ title, description }) => callBridge('POST', '/features', { title, description }),
     list_requirements: async () => callBridge('GET', '/requirements'),
     get_requirements_path: async () => callBridge('GET', '/requirements/path'),
     get_task_requirement: async ({ task_id }) => callBridge('GET', \`/tasks/\${task_id}/requirement\`),
@@ -71,13 +75,16 @@ const tools = {
 };
 
 const toolDefinitions = [
-    { name: 'list_tasks', description: 'List tasks sorted by priority. Use limit=1 and status=todo to get the next task to work on.', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: 'Max number of tasks to return' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'], description: 'Filter by status' } } } },
+    { name: 'list_tasks', description: 'List tasks sorted by priority. Use limit=1 and status=todo to get the next task to work on.', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: 'Max number of tasks to return' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'], description: 'Filter by status' }, feature_id: { type: 'string', description: 'Filter by feature ID' } } } },
     { name: 'get_task', description: 'Get a task by ID', inputSchema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
     { name: 'update_task_status', description: 'Update task status. Use ready-for-signoff when work is complete (PM will review and mark done).', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['todo', 'in-progress', 'ready-for-signoff', 'done', 'rework'], description: 'todo=not started, in-progress=working, ready-for-signoff=complete awaiting review, done=approved, rework=needs changes' } }, required: ['task_id', 'status'] } },
-    { name: 'create_task', description: 'Create a new task', inputSchema: { type: 'object', properties: { title: { type: 'string', description: 'Short task title' }, description: { type: 'string', description: 'Detailed task description' }, requirementPath: { type: 'string' } }, required: ['title'] } },
+    { name: 'create_task', description: 'Create a new task', inputSchema: { type: 'object', properties: { title: { type: 'string', description: 'Short task title' }, description: { type: 'string', description: 'Detailed task description' }, feature_id: { type: 'string', description: 'Feature ID to attach task to' }, type: { type: 'string', enum: ['task', 'bug'], description: 'Task type' } }, required: ['title'] } },
+    { name: 'list_features', description: 'List all features sorted by priority', inputSchema: { type: 'object', properties: {} } },
+    { name: 'get_feature', description: 'Get a feature by ID', inputSchema: { type: 'object', properties: { feature_id: { type: 'string' } }, required: ['feature_id'] } },
+    { name: 'create_feature', description: 'Create a new feature to group related tasks', inputSchema: { type: 'object', properties: { title: { type: 'string', description: 'Feature title' }, description: { type: 'string', description: 'Feature description' } }, required: ['title'] } },
     { name: 'list_requirements', description: 'List all requirement files', inputSchema: { type: 'object', properties: {} } },
     { name: 'get_requirements_path', description: 'Get the requirements folder path', inputSchema: { type: 'object', properties: {} } },
-    { name: 'get_task_requirement', description: 'Get the requirement path for a task', inputSchema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
+    { name: 'get_task_requirement', description: 'Get the requirement path for a task (via its feature)', inputSchema: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
     { name: 'create_requirement', description: 'Create a requirement file', inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
     { name: 'complete_interview', description: 'Signal interview completion', inputSchema: { type: 'object', properties: { requirement_path: { type: 'string' }, task_ids: { type: 'array', items: { type: 'string' } } } } }
 ];
@@ -138,9 +145,10 @@ export async function initialize(workspaceRoot: string): Promise<boolean> {
     await fs.promises.mkdir(requirementsDir, { recursive: true });
     await fs.promises.mkdir(claudeDir, { recursive: true });
 
-    // Create tasks.json
-    const tasksFile = path.join(pmcockpitDir, 'tasks.json');
-    await fs.promises.writeFile(tasksFile, JSON.stringify({ version: 1, tasks: [] }, null, 2));
+    // Database will be created by initDatabase() during extension activation
+    // Just create a marker file to indicate initialization
+    const markerFile = path.join(pmcockpitDir, '.initialized');
+    await fs.promises.writeFile(markerFile, new Date().toISOString());
 
     // Create MCP server
     const mcpServerFile = path.join(pmcockpitDir, 'mcp-server.js');
@@ -223,8 +231,12 @@ async function mergeClaudeMcp(workspaceRoot: string): Promise<void> {
 }
 
 export function isInitialized(workspaceRoot: string): boolean {
-    const tasksFile = path.join(workspaceRoot, '.pmcockpit', 'tasks.json');
-    return fs.existsSync(tasksFile);
+    const pmcockpitDir = path.join(workspaceRoot, '.pmcockpit');
+    // Check for marker file (new) or database file or legacy tasks.json
+    const markerFile = path.join(pmcockpitDir, '.initialized');
+    const dbFile = path.join(pmcockpitDir, 'data.db');
+    const legacyTasksFile = path.join(pmcockpitDir, 'tasks.json');
+    return fs.existsSync(markerFile) || fs.existsSync(dbFile) || fs.existsSync(legacyTasksFile);
 }
 
 /**

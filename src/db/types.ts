@@ -58,7 +58,7 @@ export interface NewFeature {
 }
 
 export interface NewTask {
-    feature_id?: string;
+    feature_id?: string | null;
     type?: TaskType;
     title: string;
     description?: string;

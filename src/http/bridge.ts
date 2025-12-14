@@ -82,6 +82,11 @@ export class HttpBridge {
                 tasks = tasks.filter(t => t.status === status);
             }
 
+            const featureId = searchParams.get('feature_id');
+            if (featureId) {
+                tasks = tasks.filter(t => t.feature_id === featureId);
+            }
+
             const limit = searchParams.get('limit');
             if (limit) {
                 tasks = tasks.slice(0, parseInt(limit, 10));
@@ -112,8 +117,27 @@ export class HttpBridge {
         if (method === 'POST' && pathname === '/tasks') {
             const title = body.title as string;
             const description = (body.description as string) || '';
-            const requirementPath = body.requirementPath as string | undefined;
-            return this.taskStore.addTask(title, description, requirementPath);
+            const featureId = body.feature_id as string | undefined;
+            const taskType = (body.type as 'task' | 'bug') || 'task';
+            return this.taskStore.addTask(title, description, featureId, taskType);
+        }
+
+        // GET /features - list all features
+        if (method === 'GET' && pathname === '/features') {
+            return { features: this.taskStore.getFeatures() };
+        }
+
+        // GET /features/:id
+        const featureMatch = pathname.match(/^\/features\/([^/]+)$/);
+        if (method === 'GET' && featureMatch) {
+            return this.taskStore.getFeature(featureMatch[1]);
+        }
+
+        // POST /features
+        if (method === 'POST' && pathname === '/features') {
+            const title = body.title as string;
+            const description = body.description as string | undefined;
+            return this.taskStore.createFeature({ title, description });
         }
 
         // GET /requirements

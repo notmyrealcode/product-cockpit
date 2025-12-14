@@ -72,11 +72,13 @@ export class TaskStore {
         return result;
     }
 
-    // Legacy compatibility method
-    async addTask(title: string, description: string = '', requirementPath?: string): Promise<Task> {
-        const task = this.createTask({ title, description });
-        // Note: requirementPath is now handled at the feature level
-        return task;
+    addTask(title: string, description: string = '', featureId?: string, taskType: 'task' | 'bug' = 'task'): Task {
+        return this.createTask({
+            title,
+            description,
+            feature_id: featureId || null,
+            type: taskType
+        });
     }
 
     updateTask(id: string, data: Partial<Task>): Task | null {
