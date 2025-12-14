@@ -1,17 +1,13 @@
-export type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' | 'rework';
+// Re-export types from db module for backward compatibility
+export type { TaskStatus, TaskType, Task, TaskWithFeature, Feature, Project, NewTask, NewFeature } from '../db/types';
 
-export interface Task {
-    id: string;
-    title: string;
-    description: string;
-    status: TaskStatus;
-    priority: number;
-    requirementPath?: string;
-    createdAt: string;
-    updatedAt: string;
-}
+import type { Task } from '../db/types';
 
 export interface TasksFile {
     version: number;
     tasks: Task[];
 }
+
+// Legacy Task type alias for webview - maps db Task to webview format
+import type { Task as DbTask } from '../db/types';
+export type WebviewTask = DbTask;

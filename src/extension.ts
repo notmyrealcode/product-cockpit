@@ -3,6 +3,7 @@ import { TaskStore } from './tasks/TaskStore';
 import { TaskWebviewProvider } from './webview/WebviewProvider';
 import { HttpBridge } from './http/bridge';
 import { initialize, isInitialized, updateMcpServer } from './init/initialize';
+import { initDatabase, closeDatabase } from './db';
 
 let taskStore: TaskStore | undefined;
 let webviewProvider: TaskWebviewProvider | undefined;
@@ -46,9 +47,11 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     // Update MCP server to latest version (safe - it's stateless)
     await updateMcpServer(workspaceRoot);
 
+    // Initialize database
+    await initDatabase(workspaceRoot);
+
     // Initialize TaskStore
-    taskStore = new TaskStore(workspaceRoot);
-    await taskStore.load();
+    taskStore = new TaskStore();
 
     // Initialize HTTP bridge
     httpBridge = new HttpBridge(taskStore, workspaceRoot, () => {
@@ -97,4 +100,5 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
 
 export function deactivate() {
     httpBridge?.stop();
+    closeDatabase();
 }

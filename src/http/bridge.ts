@@ -129,8 +129,14 @@ export class HttpBridge {
         // GET /tasks/:id/requirement
         const reqMatch = pathname.match(/^\/tasks\/([^/]+)\/requirement$/);
         if (method === 'GET' && reqMatch) {
-            const task = this.taskStore.getTask(reqMatch[1]);
-            return { path: task?.requirementPath || null };
+            const taskWithFeature = this.taskStore.getTaskWithFeature(reqMatch[1]);
+            // Requirement path is now on the feature, not the task
+            const featureId = taskWithFeature?.feature_id;
+            if (featureId) {
+                const feature = this.taskStore.getFeature(featureId);
+                return { path: feature?.requirement_path || null };
+            }
+            return { path: null };
         }
 
         // POST /requirements
