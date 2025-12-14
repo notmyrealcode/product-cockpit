@@ -370,8 +370,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const taskCount = this.currentProposal.tasks.length;
             const savedReqPath = this.currentProposal.requirementPath;
 
-            // Stop interview
-            this.interviewService.stop();
+            // Mark interview complete
+            this.interviewService.complete();
             this.currentProposal = undefined;
 
             // Notify webview
@@ -399,7 +399,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private handleCancelInterview(): void {
-        this.interviewService.stop();
+        this.interviewService.cancel();
         this.currentProposal = undefined;
         this.interviewScope = undefined;
 

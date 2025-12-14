@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
-import { v4 as uuid } from 'uuid';
-import * as path from 'path';
+import { SessionRepo } from '../db/repositories/sessionRepo';
+import type { RequirementSession } from '../db/types';
 
 export interface InterviewQuestion {
     id: string;
@@ -57,7 +57,7 @@ Rules:
 
 export class InterviewService {
     private process: ChildProcess | null = null;
-    private sessionId: string | null = null;
+    private session: RequirementSession | null = null;
     private scope: 'project' | 'new-feature' = 'new-feature';
     private messages: InterviewMessage[] = [];
     private callbacks: InterviewCallbacks | null = null;
@@ -74,12 +74,86 @@ export class InterviewService {
             this.stop();
         }
 
-        this.sessionId = uuid();
+        // Create session in database
+        this.session = SessionRepo.create(scope, initialInput || '');
         this.scope = scope;
         this.messages = [];
         this.callbacks = callbacks;
         this.buffer = '';
 
+        this.spawnClaudeProcess();
+
+        // Send initial prompt
+        const contextPrompt = scope === 'project'
+            ? 'I want to define requirements for my project.'
+            : 'I want to define requirements for a new feature.';
+
+        const userInput = initialInput
+            ? `${contextPrompt}\n\nHere's what I'm thinking:\n${initialInput}`
+            : contextPrompt;
+
+        this.sendMessage(userInput);
+
+        return this.session.id;
+    }
+
+    async resume(
+        sessionId: string,
+        callbacks: InterviewCallbacks
+    ): Promise<boolean> {
+        const session = SessionRepo.get(sessionId);
+        if (!session || session.status === 'complete') {
+            return false;
+        }
+
+        if (this.process) {
+            this.stop();
+        }
+
+        this.session = session;
+        this.scope = session.scope as 'project' | 'new-feature';
+        this.callbacks = callbacks;
+        this.buffer = '';
+
+        // Restore messages from conversation
+        if (session.conversation) {
+            try {
+                this.messages = JSON.parse(session.conversation);
+                // Replay messages to UI
+                for (const msg of this.messages) {
+                    callbacks.onMessage(msg);
+                }
+            } catch {
+                this.messages = [];
+            }
+        } else {
+            this.messages = [];
+        }
+
+        // Restore proposal if available
+        if (session.proposed_output) {
+            try {
+                const proposal = JSON.parse(session.proposed_output);
+                callbacks.onProposal(proposal);
+            } catch {
+                // No valid proposal
+            }
+        }
+
+        this.spawnClaudeProcess();
+
+        // Re-send conversation history to Claude
+        if (this.messages.length > 0) {
+            const history = this.messages
+                .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+                .join('\n\n');
+            this.process?.stdin?.write(`Continue this conversation:\n\n${history}\n\nPlease continue.\n`);
+        }
+
+        return true;
+    }
+
+    private spawnClaudeProcess(): void {
         // Remove VS Code Claude env vars that might interfere
         const env = { ...process.env };
         delete env.CLAUDE_CODE_SSE_PORT;
@@ -105,19 +179,6 @@ export class InterviewService {
         this.process.stderr?.on('data', (data) => this.handleStderr(data));
         this.process.on('close', (code) => this.handleClose(code));
         this.process.on('error', (err) => this.handleError(err));
-
-        // Send initial prompt
-        const contextPrompt = scope === 'project'
-            ? 'I want to define requirements for my project.'
-            : 'I want to define requirements for a new feature.';
-
-        const userInput = initialInput
-            ? `${contextPrompt}\n\nHere's what I'm thinking:\n${initialInput}`
-            : contextPrompt;
-
-        this.sendMessage(userInput);
-
-        return this.sessionId;
     }
 
     sendMessage(content: string): void {
@@ -125,6 +186,7 @@ export class InterviewService {
 
         this.messages.push({ role: 'user', content });
         this.callbacks?.onMessage({ role: 'user', content });
+        this.persistConversation();
 
         // Send to Claude
         this.process.stdin.write(content + '\n');
@@ -143,8 +205,43 @@ export class InterviewService {
             this.process.kill();
             this.process = null;
         }
-        this.sessionId = null;
+        this.session = null;
         this.callbacks = null;
+    }
+
+    cancel(): void {
+        if (this.session) {
+            SessionRepo.update(this.session.id, { status: 'cancelled' });
+        }
+        this.stop();
+    }
+
+    complete(): void {
+        if (this.session) {
+            SessionRepo.update(this.session.id, { status: 'complete' });
+        }
+        this.stop();
+    }
+
+    private persistConversation(): void {
+        if (this.session) {
+            SessionRepo.update(this.session.id, {
+                conversation: JSON.stringify(this.messages)
+            });
+        }
+    }
+
+    private persistProposal(proposal: InterviewProposal): void {
+        if (this.session) {
+            SessionRepo.update(this.session.id, {
+                proposed_output: JSON.stringify(proposal),
+                status: 'proposed'
+            });
+        }
+    }
+
+    getActiveSessions(): RequirementSession[] {
+        return SessionRepo.getActive();
     }
 
     private handleStdout(data: Buffer): void {
@@ -203,7 +300,7 @@ export class InterviewService {
             this.handleParsedResponse(parsed);
         } catch {
             // If it's not valid JSON, treat as plain text message
-            this.callbacks?.onMessage({ role: 'assistant', content: this.assistantBuffer });
+            this.addAssistantMessage(this.assistantBuffer);
         }
         this.assistantBuffer = '';
     }
@@ -217,14 +314,14 @@ export class InterviewService {
                 // Send each question
                 for (const q of questions) {
                     this.callbacks?.onQuestion(q);
-                    this.callbacks?.onMessage({ role: 'assistant', content: q.text });
+                    this.addAssistantMessage(q.text);
                 }
                 break;
             }
             case 'thinking': {
                 const text = response.text as string;
                 this.callbacks?.onThinking();
-                this.callbacks?.onMessage({ role: 'assistant', content: text });
+                this.addAssistantMessage(text);
                 break;
             }
             case 'proposal': {
@@ -234,16 +331,20 @@ export class InterviewService {
                     features: response.features as InterviewProposal['features'],
                     tasks: response.tasks as InterviewProposal['tasks'],
                 };
+                this.persistProposal(proposal);
                 this.callbacks?.onProposal(proposal);
                 break;
             }
             default:
                 // Unknown type, just show as message
-                this.callbacks?.onMessage({
-                    role: 'assistant',
-                    content: JSON.stringify(response, null, 2)
-                });
+                this.addAssistantMessage(JSON.stringify(response, null, 2));
         }
+    }
+
+    private addAssistantMessage(content: string): void {
+        this.messages.push({ role: 'assistant', content });
+        this.callbacks?.onMessage({ role: 'assistant', content });
+        this.persistConversation();
     }
 
     private handleStderr(data: Buffer): void {
@@ -271,7 +372,7 @@ export class InterviewService {
     }
 
     getSessionId(): string | null {
-        return this.sessionId;
+        return this.session?.id || null;
     }
 
     isActive(): boolean {

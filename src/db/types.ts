@@ -1,6 +1,6 @@
 export type TaskType = 'task' | 'bug';
 export type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' | 'rework';
-export type SessionStatus = 'drafting' | 'clarifying' | 'reviewing' | 'complete';
+export type SessionStatus = 'drafting' | 'clarifying' | 'proposed' | 'complete' | 'cancelled';
 
 export interface Project {
     id: string;
