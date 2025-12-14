@@ -106,6 +106,7 @@
     "@types/node": "^20.10.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.9",
     "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
