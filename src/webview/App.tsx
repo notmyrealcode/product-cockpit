@@ -6,7 +6,7 @@ import { VoiceCapture } from './components/VoiceCapture';
 import { RequirementsList } from './components/RequirementsList';
 import { Button } from './components/ui';
 import { Play, ChevronDown, ChevronRight, X, Settings } from 'lucide-react';
-import type { Task, Requirement, TaskStatus, ExtensionMessage } from './types';
+import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage } from './types';
 
 const PARSER_MODELS = [
   { id: 'haiku', name: 'Haiku', description: 'Fast & cheap' },
@@ -16,6 +16,7 @@ const PARSER_MODELS = [
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [buildInProgress, setBuildInProgress] = useState(false);
@@ -33,6 +34,7 @@ export default function App() {
       switch (message.type) {
         case 'initialized':
           setTasks(message.tasks);
+          setFeatures(message.features);
           setRequirements(message.requirements);
           break;
         case 'tasksUpdated':
@@ -44,6 +46,9 @@ export default function App() {
             prev.forEach(id => { if (taskIds.has(id)) newSelection.add(id); });
             return newSelection;
           });
+          break;
+        case 'featuresUpdated':
+          setFeatures(message.features);
           break;
         case 'requirementsUpdated':
           setRequirements(message.requirements);

@@ -40,7 +40,7 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
   const [isEditing, setIsEditing] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
-  const [editDescription, setEditDescription] = useState(task.description);
+  const [editDescription, setEditDescription] = useState(task.description || '');
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -66,7 +66,7 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
 
   const handleStartEdit = () => {
     setEditTitle(task.title);
-    setEditDescription(task.description);
+    setEditDescription(task.description || '');
     setIsEditing(true);
   };
 
@@ -74,7 +74,7 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
     if (editTitle.trim() !== task.title) {
       onTitleChange(task.id, editTitle.trim());
     }
-    if (editDescription.trim() !== task.description) {
+    if (editDescription.trim() !== (task.description || '')) {
       onDescriptionChange(task.id, editDescription.trim());
     }
     setIsEditing(false);
@@ -82,7 +82,7 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
 
   const handleCancel = () => {
     setEditTitle(task.title);
-    setEditDescription(task.description);
+    setEditDescription(task.description || '');
     setIsEditing(false);
   };
 
