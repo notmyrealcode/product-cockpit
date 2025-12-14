@@ -47,11 +47,14 @@ React 18 application bundled with esbuild. Uses Tailwind CSS v4 for styling.
 
 Key components:
 - `App.tsx` - Main app, manages task state and message handlers
+- `FeatureSection.tsx` - Collapsible feature with nested tasks
 - `TaskList.tsx` - Drag-and-drop task list using @dnd-kit
 - `TaskCard.tsx` - Individual task card with inline editing
+- `AddMenu.tsx` - Dropdown menu for creating tasks/bugs/features
 - `AddTaskForm.tsx` - Form to create new tasks with title + description
 - `VoiceCapture.tsx` - Voice recording with MediaRecorder API
 - `RequirementsList.tsx` - Requirements browser with interview trigger
+- `RequirementsInterview.tsx` - Modal for Claude interview workflow
 
 ### HttpBridge (`src/http/bridge.ts`)
 Localhost HTTP server on random port. Writes port to `.pmcockpit/.port`. Routes MCP tool calls to TaskStore.
@@ -220,3 +223,36 @@ Models downloaded from Hugging Face on first use. Stored in `.pmcockpit/whisper/
 7. Transcript parsed to tasks via `claude --print -p`
 8. Extension sends `voiceTranscribed` with parsed tasks
 9. Webview shows review UI → user confirms → tasks added
+
+## Requirements Interview
+
+Interactive Claude-powered workflow for defining features with requirements.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ AddMenu clicks  │────▶│ InterviewService│────▶│ RequirementsDoc │
+│ "New Feature    │     │ (Claude stream) │     │ + Features      │
+│  with Reqs"     │     └─────────────────┘     │ + Tasks         │
+└─────────────────┘              │              └─────────────────┘
+                                 ▼
+                    ┌─────────────────────┐
+                    │ RequirementsInterview│
+                    │ Modal (questions,   │
+                    │ thinking, proposal) │
+                    └─────────────────────┘
+```
+
+### InterviewService (`src/interview/InterviewService.ts`)
+Spawns Claude CLI with `--output-format stream-json`. System prompt instructs Claude to respond in structured JSON format:
+- `questions` - Array of questions with id, text, type (text/choice)
+- `thinking` - Acknowledgment messages
+- `proposal` - Final requirement doc + features + tasks
+
+### Message Flow
+1. User clicks "New Feature (with Requirements)" in AddMenu
+2. WebviewProvider calls `InterviewService.start()`
+3. InterviewService spawns Claude with system prompt
+4. Claude asks questions via JSON stream
+5. User answers in RequirementsInterview modal
+6. On proposal, user reviews and approves/rejects
+7. Approval triggers: save requirement doc, create features, create tasks
