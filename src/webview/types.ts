@@ -37,6 +37,26 @@ export interface Requirement {
   title: string;
 }
 
+// Interview types
+export interface InterviewQuestion {
+  id: string;
+  text: string;
+  type: 'text' | 'choice';
+  options?: string[];
+}
+
+export interface InterviewProposal {
+  requirementDoc: string;
+  requirementPath: string;
+  features: { title: string; description: string }[];
+  tasks: { title: string; description: string; featureIndex?: number }[];
+}
+
+export interface InterviewMessage {
+  role: 'assistant' | 'user';
+  content: string;
+}
+
 // Messages from extension to webview
 export type ExtensionMessage =
   | { type: 'initialized'; project: Project | null; features: Feature[]; tasks: Task[]; requirements: Requirement[] }
@@ -50,7 +70,16 @@ export type ExtensionMessage =
   | { type: 'voiceError'; error: string }
   | { type: 'buildStarted' }
   | { type: 'buildEnded' }
-  | { type: 'settingsLoaded'; parserModel: string };
+  | { type: 'settingsLoaded'; parserModel: string }
+  // Interview messages
+  | { type: 'interviewStarted'; sessionId: string; scope: string }
+  | { type: 'interviewMessage'; message: InterviewMessage }
+  | { type: 'interviewQuestion'; question: InterviewQuestion }
+  | { type: 'interviewThinking' }
+  | { type: 'interviewProposal'; proposal: InterviewProposal }
+  | { type: 'interviewComplete'; requirementPath: string }
+  | { type: 'interviewError'; error: string }
+  | { type: 'interviewCancelled' };
 
 // Messages from webview to extension
 export type WebviewMessage =
@@ -69,8 +98,12 @@ export type WebviewMessage =
   | { type: 'reorderTasks'; taskIds: string[] }
   | { type: 'moveTask'; taskId: string; featureId: string | null }
   | { type: 'archiveDone' }
-  // Requirements
-  | { type: 'startInterview'; scope?: 'project' | string } // string is feature_id
+  // Requirements / Interview
+  | { type: 'startInterview'; scope: 'project' | 'new-feature'; initialInput?: string }
+  | { type: 'answerQuestion'; questionId: string; answer: string }
+  | { type: 'approveProposal' }
+  | { type: 'rejectProposal'; feedback: string }
+  | { type: 'cancelInterview' }
   | { type: 'openRequirement'; path: string }
   // Voice & Build
   | { type: 'startRecording' }

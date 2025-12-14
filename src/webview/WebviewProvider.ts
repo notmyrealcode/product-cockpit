@@ -4,6 +4,7 @@ import * as path from 'path';
 import { TaskStore } from '../tasks/TaskStore';
 import { WhisperService } from '../voice/WhisperService';
 import { AudioRecorder } from '../voice/AudioRecorder';
+import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage } from '../interview/InterviewService';
 import type { Task } from '../tasks/types';
 
 interface Requirement {
@@ -18,9 +19,12 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private readonly requirementsDir: string;
     private readonly whisperService: WhisperService;
     private readonly audioRecorder: AudioRecorder;
+    private readonly interviewService: InterviewService;
     private buildTerminal?: vscode.Terminal;
     private buildTaskIds?: Set<string>;
     private buildStatusListener?: vscode.Disposable;
+    private currentProposal?: InterviewProposal;
+    private interviewScope?: 'project' | 'new-feature';
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -30,6 +34,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
         this.whisperService = new WhisperService(workspaceRoot);
         this.audioRecorder = new AudioRecorder(workspaceRoot);
+        this.interviewService = new InterviewService(workspaceRoot);
 
         // Subscribe to task changes
         this._disposables.push(
@@ -109,7 +114,19 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         }
                         break;
                     case 'startInterview':
-                        this.startInterview();
+                        this.handleStartInterview(message.scope, message.initialInput);
+                        break;
+                    case 'answerQuestion':
+                        this.interviewService.answerQuestion(message.questionId, message.answer);
+                        break;
+                    case 'approveProposal':
+                        this.handleApproveProposal();
+                        break;
+                    case 'rejectProposal':
+                        this.interviewService.rejectProposal(message.feedback);
+                        break;
+                    case 'cancelInterview':
+                        this.handleCancelInterview();
                         break;
                     case 'openRequirement':
                         this.openRequirement(message.path);
@@ -238,15 +255,157 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private startInterview(): void {
-        const terminal = vscode.window.createTerminal({
-            name: 'Product Cockpit Interview'
-        });
+    private async handleStartInterview(scope: 'project' | 'new-feature', initialInput?: string): Promise<void> {
+        this.interviewScope = scope;
+        this.currentProposal = undefined;
 
-        const prompt = `You are helping a PM create a requirement document. Interview them about the feature they want to build. Ask clarifying questions until you understand it well. Then use the create_requirement tool to save a structured requirements doc to docs/requirements/, and create_task tool to propose implementation tasks. Finally, call complete_interview when done.`;
+        try {
+            const sessionId = await this.interviewService.start(scope, initialInput, {
+                onMessage: (message: InterviewMessage) => {
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            type: 'interviewMessage',
+                            message
+                        });
+                    }
+                },
+                onQuestion: (question: InterviewQuestion) => {
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            type: 'interviewQuestion',
+                            question
+                        });
+                    }
+                },
+                onThinking: () => {
+                    if (this._view) {
+                        this._view.webview.postMessage({ type: 'interviewThinking' });
+                    }
+                },
+                onProposal: (proposal: InterviewProposal) => {
+                    this.currentProposal = proposal;
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            type: 'interviewProposal',
+                            proposal
+                        });
+                    }
+                },
+                onComplete: (requirementPath: string) => {
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            type: 'interviewComplete',
+                            requirementPath
+                        });
+                    }
+                },
+                onError: (error: string) => {
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            type: 'interviewError',
+                            error
+                        });
+                    }
+                }
+            });
 
-        terminal.sendText(`claude "${prompt.replace(/"/g, '\\"')}"`);
-        terminal.show();
+            // Notify webview that interview started
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'interviewStarted',
+                    sessionId,
+                    scope
+                });
+            }
+        } catch (error) {
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'interviewError',
+                    error: error instanceof Error ? error.message : 'Failed to start interview'
+                });
+            }
+        }
+    }
+
+    private async handleApproveProposal(): Promise<void> {
+        if (!this.currentProposal) {
+            return;
+        }
+
+        try {
+            // 1. Save requirement document
+            const reqPath = path.join(this.workspaceRoot, this.currentProposal.requirementPath);
+            const reqDir = path.dirname(reqPath);
+            await fs.promises.mkdir(reqDir, { recursive: true });
+            await fs.promises.writeFile(reqPath, this.currentProposal.requirementDoc, 'utf-8');
+
+            // 2. Create features and tasks
+            const featureIdMap: Map<number, string> = new Map();
+
+            // Create features first
+            for (let i = 0; i < this.currentProposal.features.length; i++) {
+                const feat = this.currentProposal.features[i];
+                const feature = this.taskStore.createFeature({
+                    title: feat.title,
+                    description: feat.description,
+                    requirement_path: this.currentProposal.requirementPath
+                });
+                featureIdMap.set(i, feature.id);
+            }
+
+            // Create tasks
+            for (const task of this.currentProposal.tasks) {
+                const featureId = task.featureIndex !== undefined
+                    ? featureIdMap.get(task.featureIndex)
+                    : undefined;
+                this.taskStore.createTask({
+                    title: task.title,
+                    description: task.description,
+                    feature_id: featureId || null
+                });
+            }
+
+            // Save counts before clearing
+            const featureCount = featureIdMap.size;
+            const taskCount = this.currentProposal.tasks.length;
+            const savedReqPath = this.currentProposal.requirementPath;
+
+            // Stop interview
+            this.interviewService.stop();
+            this.currentProposal = undefined;
+
+            // Notify webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'interviewComplete',
+                    requirementPath: savedReqPath
+                });
+            }
+
+            // Refresh requirements list
+            this.sendRequirements();
+
+            vscode.window.showInformationMessage(
+                `Created ${featureCount} feature(s) and ${taskCount} task(s)`
+            );
+        } catch (error) {
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'interviewError',
+                    error: error instanceof Error ? error.message : 'Failed to save proposal'
+                });
+            }
+        }
+    }
+
+    private handleCancelInterview(): void {
+        this.interviewService.stop();
+        this.currentProposal = undefined;
+        this.interviewScope = undefined;
+
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'interviewCancelled' });
+        }
     }
 
     private async handleStartRecording(): Promise<void> {

@@ -22,9 +22,11 @@ import { FeatureSection } from './components/FeatureSection';
 import { AddTaskForm } from './components/AddTaskForm';
 import { VoiceCapture } from './components/VoiceCapture';
 import { RequirementsList } from './components/RequirementsList';
+import { RequirementsInterview } from './components/RequirementsInterview';
+import { AddMenu } from './components/AddMenu';
 import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings, Plus } from 'lucide-react';
-import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage } from './types';
+import { Play, ChevronDown, ChevronRight, X, Settings } from 'lucide-react';
+import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
 
 const PARSER_MODELS = [
   { id: 'haiku', name: 'Haiku', description: 'Fast & cheap' },
@@ -55,6 +57,17 @@ export default function App() {
   const [showAddFeature, setShowAddFeature] = useState(false);
   const [newFeatureTitle, setNewFeatureTitle] = useState('');
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [addTaskType, setAddTaskType] = useState<'task' | 'bug'>('task');
+
+  // Interview state
+  const [interviewActive, setInterviewActive] = useState(false);
+  const [interviewScope, setInterviewScope] = useState<'project' | 'new-feature'>('new-feature');
+  const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<InterviewQuestion | null>(null);
+  const [currentProposal, setCurrentProposal] = useState<InterviewProposal | null>(null);
+  const [interviewThinking, setInterviewThinking] = useState(false);
+  const [interviewError, setInterviewError] = useState<string | null>(null);
 
   // DnD sensors
   const sensors = useSensors(
@@ -137,6 +150,43 @@ export default function App() {
         case 'settingsLoaded':
           setParserModel(message.parserModel);
           break;
+        // Interview messages
+        case 'interviewStarted':
+          setInterviewActive(true);
+          setInterviewScope(message.scope as 'project' | 'new-feature');
+          setInterviewMessages([]);
+          setCurrentQuestion(null);
+          setCurrentProposal(null);
+          setInterviewError(null);
+          break;
+        case 'interviewMessage':
+          setInterviewMessages(prev => [...prev, message.message]);
+          break;
+        case 'interviewQuestion':
+          setCurrentQuestion(message.question);
+          setInterviewThinking(false);
+          break;
+        case 'interviewThinking':
+          setInterviewThinking(true);
+          break;
+        case 'interviewProposal':
+          setCurrentProposal(message.proposal);
+          setCurrentQuestion(null);
+          setInterviewThinking(false);
+          break;
+        case 'interviewComplete':
+        case 'interviewCancelled':
+          setInterviewActive(false);
+          setInterviewMessages([]);
+          setCurrentQuestion(null);
+          setCurrentProposal(null);
+          setInterviewThinking(false);
+          setInterviewError(null);
+          break;
+        case 'interviewError':
+          setInterviewError(message.error);
+          setInterviewThinking(false);
+          break;
         // voiceTranscribed and voiceError are handled by VoiceCapture component directly
       }
     };
@@ -175,8 +225,28 @@ export default function App() {
     vscode.postMessage({ type: 'archiveDone' });
   };
 
-  const handleStartInterview = () => {
-    vscode.postMessage({ type: 'startInterview' });
+  const handleStartInterview = (scope: 'project' | 'new-feature' = 'new-feature', initialInput?: string) => {
+    vscode.postMessage({ type: 'startInterview', scope, initialInput });
+  };
+
+  const handleInterviewAnswer = (questionId: string, answer: string) => {
+    vscode.postMessage({ type: 'answerQuestion', questionId, answer });
+    setCurrentQuestion(null);
+    setInterviewThinking(true);
+  };
+
+  const handleInterviewApprove = () => {
+    vscode.postMessage({ type: 'approveProposal' });
+  };
+
+  const handleInterviewReject = (feedback: string) => {
+    vscode.postMessage({ type: 'rejectProposal', feedback });
+    setCurrentProposal(null);
+    setInterviewThinking(true);
+  };
+
+  const handleInterviewCancel = () => {
+    vscode.postMessage({ type: 'cancelInterview' });
   };
 
   const handleOpenRequirement = (path: string) => {
@@ -390,25 +460,47 @@ export default function App() {
         </div>
       )}
 
-      {/* Add Task / Feature buttons */}
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1">
-          <AddTaskForm onAdd={handleAddTask} />
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setShowAddFeature(!showAddFeature)}
-          className="h-9 px-3 text-xs whitespace-nowrap"
-        >
-          <Plus size={14} className="mr-1" />
-          Feature
-        </Button>
+      {/* Add Menu */}
+      <div className="flex justify-end mb-4">
+        <AddMenu
+          onAddTask={() => {
+            setAddTaskType('task');
+            setShowAddTask(true);
+          }}
+          onAddBug={() => {
+            setAddTaskType('bug');
+            setShowAddTask(true);
+          }}
+          onAddFeature={() => setShowAddFeature(true)}
+          onNewFeatureWithRequirements={() => handleStartInterview('new-feature')}
+        />
       </div>
+
+      {/* Quick Add Task form */}
+      {showAddTask && (
+        <div className="mb-4 p-3 bg-neutral-0 border border-neutral-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`text-xs font-medium ${addTaskType === 'bug' ? 'text-danger' : 'text-neutral-600'}`}>
+              New {addTaskType === 'bug' ? 'Bug' : 'Task'}
+            </span>
+          </div>
+          <AddTaskForm
+            onAdd={(title, description) => {
+              vscode.postMessage({ type: 'addTask', title, description, taskType: addTaskType });
+              setShowAddTask(false);
+            }}
+            onCancel={() => setShowAddTask(false)}
+            placeholder={addTaskType === 'bug' ? 'Bug title...' : 'Task title...'}
+          />
+        </div>
+      )}
 
       {/* Add Feature form */}
       {showAddFeature && (
         <div className="mb-4 p-3 bg-neutral-0 border border-neutral-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-neutral-600">New Feature</span>
+          </div>
           <div className="flex gap-2">
             <input
               type="text"
@@ -576,8 +668,24 @@ export default function App() {
         requirements={requirements}
         tasks={tasks}
         onOpenRequirement={handleOpenRequirement}
-        onStartInterview={handleStartInterview}
+        onStartInterview={() => handleStartInterview('new-feature')}
       />
+
+      {/* Requirements Interview Modal */}
+      {interviewActive && (
+        <RequirementsInterview
+          scope={interviewScope}
+          messages={interviewMessages}
+          currentQuestion={currentQuestion}
+          proposal={currentProposal}
+          isThinking={interviewThinking}
+          error={interviewError}
+          onAnswer={handleInterviewAnswer}
+          onApprove={handleInterviewApprove}
+          onReject={handleInterviewReject}
+          onCancel={handleInterviewCancel}
+        />
+      )}
     </div>
   );
 }
