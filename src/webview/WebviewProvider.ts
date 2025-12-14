@@ -68,17 +68,39 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'ready':
                         this.sendInitialized();
                         break;
+                    // Feature handlers
+                    case 'addFeature':
+                        this.taskStore.createFeature({ title: message.title, description: message.description });
+                        break;
+                    case 'updateFeature':
+                        this.taskStore.updateFeature(message.id, message.updates);
+                        break;
+                    case 'deleteFeature':
+                        this.taskStore.deleteFeature(message.id);
+                        break;
+                    case 'reorderFeatures':
+                        this.taskStore.reorderFeatures(message.featureIds);
+                        break;
+                    // Task handlers
                     case 'addTask':
-                        await this.taskStore.addTask(message.title, message.description);
+                        this.taskStore.createTask({
+                            title: message.title,
+                            description: message.description,
+                            feature_id: message.featureId,
+                            type: message.taskType
+                        });
                         break;
                     case 'updateTask':
-                        await this.taskStore.updateTask(message.id, message.updates);
+                        this.taskStore.updateTask(message.id, message.updates);
                         break;
                     case 'deleteTask':
-                        await this.taskStore.deleteTask(message.id);
+                        this.taskStore.deleteTask(message.id);
                         break;
                     case 'reorderTasks':
-                        await this.taskStore.reorderTasks(message.taskIds);
+                        this.taskStore.reorderTasks(message.taskIds);
+                        break;
+                    case 'moveTask':
+                        this.taskStore.moveTaskToFeature(message.taskId, message.featureId);
                         break;
                     case 'archiveDone':
                         const count = await this.taskStore.archiveDoneTasks();
@@ -132,20 +154,29 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private sendTasks(): void {
         if (this._view) {
             const tasks = this.taskStore.getTasks();
+            const features = this.taskStore.getFeatures();
             this._view.webview.postMessage({
                 type: 'tasksUpdated',
                 tasks
+            });
+            this._view.webview.postMessage({
+                type: 'featuresUpdated',
+                features
             });
         }
     }
 
     private async sendInitialized(): Promise<void> {
         if (this._view) {
+            const project = this.taskStore.getProject();
+            const features = this.taskStore.getFeatures();
             const tasks = this.taskStore.getTasks();
             const requirements = await this.getRequirements();
             const parserModel = vscode.workspace.getConfiguration('pmcockpit').get<string>('parserModel', 'haiku');
             this._view.webview.postMessage({
                 type: 'initialized',
+                project,
+                features,
                 tasks,
                 requirements
             });
