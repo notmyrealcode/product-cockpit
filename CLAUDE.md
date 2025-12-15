@@ -19,6 +19,24 @@ Please refer to @docs/design_style_guide.md
 2. Update `docs/TECH.md` for architectural changes only
 3. Update `docs/TODO.md` if needed
 
+## Testing
+
+Run tests with `npm test` (single run) or `npm run test:watch` (watch mode).
+
+**Writing tests:** Create `*.test.ts` files alongside source files. Tests use Vitest.
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('Feature', () => {
+    it('works correctly', () => {
+        expect(result).toBe(expected);
+    });
+});
+```
+
+**Note:** Tests run in Node.js, not VS Code. For CLI integration tests, use 60s timeout.
+
 ## TECH.md Guidelines
 Update for: new components, data flow changes, external APIs. Skip: bug fixes, troubleshooting, changelogs. Be concise - one example beats three verbose ones.
 
@@ -31,18 +49,19 @@ This project is in the requirements/planning phase. The `docs/pm-cockpit-require
 ## Technical Stack
 
 - **Extension:** TypeScript, VS Code Extension API
-- **Storage:** JSON files (`.pmcockpit/tasks.json`)
+- **Storage:** SQLite via sql.js (`.pmcockpit/data.db`)
 - **MCP Server:** TypeScript
-- **Voice Transcription:** Python subprocess (Parakeet/Whisper)
+- **Voice Transcription:** whisper.cpp (local)
 - **Requirements Storage:** Markdown files in `docs/requirements/`
+- **Testing:** Vitest
 
 ## Architecture
 
 ### Data Storage
-- `.pmcockpit/` - Extension data (tasks.json, config.json, mcp-server.js)
-- `docs/requirements/` - User-visible requirement markdown files
-- `.claude/settings.json` - Claude Code tool permissions
-- `.claude/mcp.json` - MCP server configuration
+- `.pmcockpit/data.db` - SQLite database (sql.js)
+- `.pmcockpit/mcp-server.js` - MCP server
+- `docs/requirements/` - Requirement markdown files
+- `.mcp.json` - MCP server configuration
 
 ### MCP Tools to Implement
 - `get_next_task` - Returns highest-priority todo task

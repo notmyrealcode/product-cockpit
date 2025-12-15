@@ -85,6 +85,34 @@ npm run build:webview    # Webview only
 npm run watch            # Watch mode for both
 ```
 
+## Testing
+
+Uses **Vitest** for testing. Tests run in Node.js environment (no VS Code runtime needed).
+
+```bash
+npm test                 # Run all tests once
+npm run test:watch       # Watch mode with auto-rerun
+npm run test:ui          # Browser-based test UI
+```
+
+### Test Files
+- `src/**/*.test.ts` - Test files (excluded from TypeScript compilation)
+- `vitest.config.ts` - Vitest configuration
+
+### Writing Tests
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('MyService', () => {
+    it('does something', () => {
+        expect(result).toBe(expected);
+    });
+});
+```
+
+### Claude CLI Integration Tests
+Tests in `src/interview/InterviewService.test.ts` call Claude CLI directly with `execSync` to verify JSON schema validation. Uses 60s timeout for API calls.
+
 CSS is built separately using `@tailwindcss/cli` to handle v4 syntax.
 
 ## Data Flow
@@ -243,10 +271,11 @@ Interactive Claude-powered workflow for defining features with requirements.
 ```
 
 ### InterviewService (`src/interview/InterviewService.ts`)
-Spawns Claude CLI with `--output-format stream-json`. System prompt instructs Claude to respond in structured JSON format:
-- `questions` - Array of questions with id, text, type (text/choice)
-- `thinking` - Acknowledgment messages
+Spawns Claude CLI with `--output-format json --json-schema` for structured output. Schema enforces response types:
+- `questions` - Array of questions with id, text, questionType (text/choice), optional options
 - `proposal` - Final requirement doc + features + tasks
+
+CLI outputs wrapped as `{"type":"result","structured_output":{...}}`
 
 ### Message Flow
 1. User clicks "New Feature (with Requirements)" in AddMenu
