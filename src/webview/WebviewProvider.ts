@@ -4,12 +4,26 @@ import * as path from 'path';
 import { TaskStore } from '../tasks/TaskStore';
 import { WhisperService } from '../voice/WhisperService';
 import { AudioRecorder } from '../voice/AudioRecorder';
-import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage, InterviewScope } from '../interview/InterviewService';
+import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage, InterviewScope, InterviewContext } from '../interview/InterviewService';
+import { ProjectContext } from '../context/ProjectContext';
 import type { Task } from '../tasks/types';
+
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface Requirement {
     path: string;
     title: string;
+}
+
+interface RequirementIndex {
+    [path: string]: {
+        title: string;
+        summary: string;
+        updatedAt: string;
+    };
 }
 
 export class TaskWebviewProvider implements vscode.WebviewViewProvider {
@@ -17,14 +31,17 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private readonly _disposables: vscode.Disposable[] = [];
     private readonly requirementsDir: string;
+    private readonly requirementsIndexPath: string;
     private readonly whisperService: WhisperService;
     private readonly audioRecorder: AudioRecorder;
     private readonly interviewService: InterviewService;
+    private readonly projectContext: ProjectContext;
     private buildTerminal?: vscode.Terminal;
     private buildTaskIds?: Set<string>;
     private buildStatusListener?: vscode.Disposable;
     private currentProposal?: InterviewProposal;
     private interviewScope?: InterviewScope;
+    private recordingRawMode = false;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -32,13 +49,22 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         private readonly workspaceRoot: string
     ) {
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
+        this.requirementsIndexPath = path.join(this.requirementsDir, '.index.json');
         this.whisperService = new WhisperService(workspaceRoot);
         this.audioRecorder = new AudioRecorder(workspaceRoot);
         this.interviewService = new InterviewService(workspaceRoot);
+        this.projectContext = new ProjectContext(workspaceRoot);
+
+        // Initialize project context (creates COPILOT.md, design.md, etc.)
+        this.projectContext.initialize();
 
         // Subscribe to task changes
         this._disposables.push(
-            this.taskStore.onDidChange(() => this.sendTasks())
+            this.taskStore.onDidChange(() => {
+                this.sendTasks();
+                // Update COPILOT.md with current features
+                this.projectContext.updateCopilotMd(this.taskStore.getFeatures());
+            })
         );
 
         // Watch requirements folder for changes
@@ -107,6 +133,10 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'moveTask':
                         this.taskStore.moveTaskToFeature(message.taskId, message.featureId);
                         break;
+                    case 'updateProject':
+                        const updatedProject = this.taskStore.updateProject(message.updates);
+                        this._view?.webview.postMessage({ type: 'projectUpdated', project: updatedProject });
+                        break;
                     case 'archiveDone':
                         const count = await this.taskStore.archiveDoneTasks();
                         if (count > 0) {
@@ -120,7 +150,12 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         this.interviewService.answerQuestion(message.questionId, message.answer);
                         break;
                     case 'approveProposal':
-                        this.handleApproveProposal(message.editedRequirementDoc);
+                        this.handleApproveProposal(
+                            message.editedRequirementDoc,
+                            message.editedDesignChanges,
+                            message.removedFeatureIndices,
+                            message.removedTaskIndices
+                        );
                         break;
                     case 'rejectProposal':
                         this.interviewService.rejectProposal(message.feedback);
@@ -131,14 +166,17 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'openRequirement':
                         this.openRequirement(message.path);
                         break;
+                    case 'openDesignGuide':
+                        this.projectContext.openDesignGuide();
+                        break;
                     case 'deleteRequirement':
                         this.deleteRequirement(message.path);
                         break;
                     case 'startRecording':
-                        this.handleStartRecording();
+                        this.handleStartRecording(message.rawMode);
                         break;
                     case 'stopRecording':
-                        this.handleStopRecording();
+                        this.handleStopRecording(this.recordingRawMode);
                         break;
                     case 'processText':
                         this.handleProcessText(message.text);
@@ -262,6 +300,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         const fullPath = path.join(this.workspaceRoot, reqPath);
         try {
             await fs.promises.unlink(fullPath);
+            // Also remove from index
+            await this.removeFromRequirementsIndex(reqPath);
             vscode.window.showInformationMessage(`Deleted ${path.basename(reqPath)}`);
             // File watcher will trigger sendRequirements automatically
         } catch (error) {
@@ -269,11 +309,75 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private async readRequirementsIndex(): Promise<RequirementIndex> {
+        try {
+            const content = await fs.promises.readFile(this.requirementsIndexPath, 'utf-8');
+            return JSON.parse(content);
+        } catch {
+            return {};
+        }
+    }
+
+    private async writeRequirementsIndex(index: RequirementIndex): Promise<void> {
+        await fs.promises.writeFile(
+            this.requirementsIndexPath,
+            JSON.stringify(index, null, 2),
+            'utf-8'
+        );
+    }
+
+    private async removeFromRequirementsIndex(reqPath: string): Promise<void> {
+        const index = await this.readRequirementsIndex();
+        delete index[reqPath];
+        await this.writeRequirementsIndex(index);
+    }
+
+    private async generateRequirementSummary(content: string): Promise<string> {
+        try {
+            // Use Claude to generate a 1-line summary
+            const prompt = `Summarize this requirement document in exactly one sentence (max 100 chars). Output ONLY the summary, nothing else:\n\n${content.slice(0, 2000)}`;
+
+            const { stdout } = await execAsync(
+                `echo ${JSON.stringify(prompt)} | claude -p --model claude-3-5-haiku-latest`,
+                { cwd: this.workspaceRoot, timeout: 30000 }
+            );
+
+            return stdout.trim().slice(0, 150);  // Ensure it's not too long
+        } catch (error) {
+            console.error('[WebviewProvider] Failed to generate summary:', error);
+            // Fallback: extract first sentence
+            const firstLine = content.split('\n').find(l => l.trim() && !l.startsWith('#'));
+            return firstLine?.slice(0, 100) || 'No description available';
+        }
+    }
+
+    private async updateRequirementInIndex(reqPath: string, content: string): Promise<void> {
+        const index = await this.readRequirementsIndex();
+
+        // Extract title from content
+        const titleMatch = content.match(/^#\s+(.+)$/m);
+        const title = titleMatch ? titleMatch[1] : path.basename(reqPath, '.md');
+
+        // Generate summary
+        const summary = await this.generateRequirementSummary(content);
+
+        index[reqPath] = {
+            title,
+            summary,
+            updatedAt: new Date().toISOString()
+        };
+
+        await this.writeRequirementsIndex(index);
+    }
+
     private async handleStartInterview(scope: InterviewScope, initialInput?: string): Promise<void> {
         this.interviewScope = scope;
         this.currentProposal = undefined;
 
         try {
+            // Gather context about existing app
+            const context = await this.gatherInterviewContext();
+
             const sessionId = await this.interviewService.start(scope, initialInput, {
                 onMessage: (message: InterviewMessage) => {
                     if (this._view) {
@@ -296,12 +400,23 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         this._view.webview.postMessage({ type: 'interviewThinking' });
                     }
                 },
-                onProposal: (proposal: InterviewProposal) => {
+                onProposal: async (proposal: InterviewProposal) => {
                     this.currentProposal = proposal;
                     if (this._view) {
+                        // Read current design.md for diff view
+                        let currentDesignMd: string | undefined;
+                        if (proposal.proposedDesignMd) {
+                            const designPath = path.join(this.workspaceRoot, 'docs', 'requirements', 'design.md');
+                            try {
+                                currentDesignMd = await fs.promises.readFile(designPath, 'utf-8');
+                            } catch {
+                                // File doesn't exist yet
+                            }
+                        }
                         this._view.webview.postMessage({
                             type: 'interviewProposal',
-                            proposal
+                            proposal,
+                            currentDesignMd
                         });
                     }
                 },
@@ -321,7 +436,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                 }
-            });
+            }, context);
 
             // Notify webview that interview started
             if (this._view) {
@@ -341,7 +456,12 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async handleApproveProposal(editedRequirementDoc?: string): Promise<void> {
+    private async handleApproveProposal(
+        editedRequirementDoc?: string,
+        editedDesignChanges?: string,
+        removedFeatureIndices?: number[],
+        removedTaskIndices?: number[]
+    ): Promise<void> {
         if (!this.currentProposal) {
             return;
         }
@@ -349,23 +469,56 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         try {
             const isTaskScope = this.interviewScope === 'task';
             let savedReqPath: string | undefined;
+            const removedFeatures = new Set(removedFeatureIndices || []);
+            const removedTasks = new Set(removedTaskIndices || []);
 
             // 1. Save requirement document (only for project/feature scope)
             if (!isTaskScope && this.currentProposal.requirementPath) {
                 const docContent = editedRequirementDoc || this.currentProposal.requirementDoc;
-                const reqPath = path.join(this.workspaceRoot, this.currentProposal.requirementPath);
+                const reqPath = path.resolve(this.workspaceRoot, this.currentProposal.requirementPath);
+
+                // Security: Validate path is within workspace (prevent path traversal)
+                if (!reqPath.startsWith(this.workspaceRoot + path.sep)) {
+                    throw new Error('Invalid requirement path: must be within workspace');
+                }
+
                 const reqDir = path.dirname(reqPath);
                 await fs.promises.mkdir(reqDir, { recursive: true });
                 await fs.promises.writeFile(reqPath, docContent, 'utf-8');
                 savedReqPath = this.currentProposal.requirementPath;
+
+                // Update requirements index with summary (async, don't block)
+                this.updateRequirementInIndex(savedReqPath, docContent).catch(err => {
+                    console.error('[WebviewProvider] Failed to update requirements index:', err);
+                });
             }
 
-            // 2. Create features and tasks
+            // 2. Save design.md (full replacement)
+            const proposedDesign = editedDesignChanges !== undefined
+                ? editedDesignChanges
+                : this.currentProposal.proposedDesignMd;
+
+            if (proposedDesign && proposedDesign.trim()) {
+                const designPath = path.resolve(this.workspaceRoot, 'docs/requirements/design.md');
+
+                // Security: Validate path
+                if (designPath.startsWith(this.workspaceRoot + path.sep)) {
+                    const designDir = path.dirname(designPath);
+                    await fs.promises.mkdir(designDir, { recursive: true });
+
+                    // REPLACE entire file content (not append)
+                    await fs.promises.writeFile(designPath, proposedDesign.trim() + '\n', 'utf-8');
+                }
+            }
+
+            // 3. Create features and tasks (filtering out removed ones)
             const featureIdMap: Map<number, string> = new Map();
 
             // Create features first (only for non-task scope)
             if (!isTaskScope) {
                 for (let i = 0; i < this.currentProposal.features.length; i++) {
+                    if (removedFeatures.has(i)) continue;  // Skip removed features
+
                     const feat = this.currentProposal.features[i];
                     const feature = this.taskStore.createFeature({
                         title: feat.title,
@@ -376,8 +529,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 }
             }
 
-            // Create tasks
-            for (const task of this.currentProposal.tasks) {
+            // Create tasks (filtering out removed ones and tasks belonging to removed features)
+            let taskCount = 0;
+            for (let i = 0; i < this.currentProposal.tasks.length; i++) {
+                if (removedTasks.has(i)) continue;  // Skip removed tasks
+
+                const task = this.currentProposal.tasks[i];
+
+                // Skip tasks belonging to removed features
+                if (task.featureIndex !== undefined && removedFeatures.has(task.featureIndex)) {
+                    continue;
+                }
+
                 const featureId = task.featureIndex !== undefined
                     ? featureIdMap.get(task.featureIndex)
                     : undefined;
@@ -386,11 +549,11 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     description: task.description,
                     feature_id: featureId || null
                 });
+                taskCount++;
             }
 
-            // Save counts before clearing
+            // Save counts
             const featureCount = featureIdMap.size;
-            const taskCount = this.currentProposal.tasks.length;
 
             // Mark interview complete
             this.interviewService.complete();
@@ -437,8 +600,55 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async handleStartRecording(): Promise<void> {
+    private async gatherInterviewContext(): Promise<InterviewContext> {
+        const context: InterviewContext = {};
+
+        // Get project info
+        const project = this.taskStore.getProject();
+        if (project) {
+            if (project.title) context.projectTitle = project.title;
+            if (project.description) context.projectDescription = project.description;
+        }
+
+        // Get existing features
+        const features = this.taskStore.getFeatures();
+        if (features.length > 0) {
+            context.existingFeatures = features.map(f => ({
+                title: f.title,
+                description: f.description
+            }));
+        }
+
+        // Get existing requirements with summaries from index
+        const requirements = await this.getRequirements();
+        const index = await this.readRequirementsIndex();
+        if (requirements.length > 0) {
+            context.existingRequirements = requirements.map(r => {
+                const indexed = index[r.path];
+                return {
+                    path: r.path,
+                    title: indexed?.title || r.title,
+                    summary: indexed?.summary || 'No summary available'
+                };
+            });
+        }
+
+        // Read current design.md - always include (empty string if doesn't exist)
+        const designPath = path.join(this.workspaceRoot, 'docs', 'requirements', 'design.md');
         try {
+            context.currentDesignMd = await fs.promises.readFile(designPath, 'utf-8');
+        } catch {
+            context.currentDesignMd = '';  // File doesn't exist
+        }
+
+        return context;
+    }
+
+    private async handleStartRecording(rawMode = false): Promise<void> {
+        try {
+            // Store raw mode for when recording stops
+            this.recordingRawMode = rawMode;
+
             // Check if audio recording (sox) and transcription (whisper) are available
             const audioCheck = await this.audioRecorder.isAvailable();
             const whisperBinary = await this.whisperService.getBinaryPath();
@@ -636,7 +846,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async handleStopRecording(): Promise<void> {
+    private async handleStopRecording(rawMode = false): Promise<void> {
         try {
             // Stop recording and get the audio file path
             const audioPath = await this.audioRecorder.stopRecording();
@@ -663,7 +873,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Step 2: Parse into tasks
+            // Raw mode: return transcript directly without parsing
+            if (rawMode) {
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'voiceRawTranscript',
+                        transcript: transcript.trim()
+                    });
+                }
+                return;
+            }
+
+            // Step 2: Parse into tasks (normal mode)
             this.sendProcessingStatus('Organizing into tasks...');
             const tasks = await this.parseTranscriptToTasks(transcript);
 
@@ -851,7 +1072,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src blob:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src blob:; connect-src https://hacker-news.firebaseio.com;">
     <link href="${styleUri}" rel="stylesheet">
     <title>Product Cockpit</title>
 </head>

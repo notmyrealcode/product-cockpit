@@ -26,8 +26,24 @@ import { RequirementsInterview } from './components/RequirementsInterview';
 import { AddMenu } from './components/AddMenu';
 import { RecordButton } from './components/RecordButton';
 import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings } from 'lucide-react';
-import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
+import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
+
+// Custom cockpit icon matching extension icon
+function CockpitIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+      <path d="M6 12 A6 6 0 0 1 18 12" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+      <line x1="12" y1="12" x2="16" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+      <path d="M18 4 L18.5 5.5 L20 6 L18.5 6.5 L18 8 L17.5 6.5 L16 6 L17.5 5.5 Z" fill="currentColor"/>
+      <circle cx="7" cy="10" r="1" fill="currentColor"/>
+      <circle cx="9" cy="7.5" r="1" fill="currentColor"/>
+      <circle cx="12" cy="6" r="1" fill="currentColor"/>
+    </svg>
+  );
+}
+import type { Task, Feature, Requirement, Project, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
 
 const PARSER_MODELS = [
   { id: 'haiku', name: 'Haiku', description: 'Fast & cheap' },
@@ -50,10 +66,12 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [buildInProgress, setBuildInProgress] = useState(false);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [parserModel, setParserModel] = useState('haiku');
   const [showAddFeature, setShowAddFeature] = useState(false);
   const [newFeatureTitle, setNewFeatureTitle] = useState('');
@@ -67,10 +85,11 @@ export default function App() {
   const [interviewScope, setInterviewScope] = useState<'project' | 'new-feature' | 'task'>('new-feature');
   const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
   const [questionQueue, setQuestionQueue] = useState<InterviewQuestion[]>([]);
-  const [pendingAnswers, setPendingAnswers] = useState<Map<string, string>>(new Map());
+  const [pendingAnswers, setPendingAnswers] = useState<Map<string, { question: string; answer: string }>>(new Map());
   const [currentProposal, setCurrentProposal] = useState<InterviewProposal | null>(null);
   const [interviewThinking, setInterviewThinking] = useState(false);
   const [interviewError, setInterviewError] = useState<string | null>(null);
+  const [currentDesignMd, setCurrentDesignMd] = useState<string | null>(null);
 
   // Refs to access current state in event handlers (avoid stale closures)
   const interviewScopeRef = useRef(interviewScope);
@@ -127,6 +146,10 @@ export default function App() {
           setTasks(message.tasks);
           setFeatures(message.features);
           setRequirements(message.requirements);
+          setProject(message.project);
+          break;
+        case 'projectUpdated':
+          setProject(message.project);
           break;
         case 'tasksUpdated':
           setTasks(message.tasks);
@@ -198,6 +221,7 @@ export default function App() {
             vscode.postMessage({ type: 'approveProposal' });
           } else {
             setCurrentProposal(message.proposal);
+            setCurrentDesignMd(message.currentDesignMd || null);
             setQuestionQueue([]);  // Clear queue when proposal received
             setInterviewThinking(false);
           }
@@ -210,6 +234,7 @@ export default function App() {
           setQuestionQueue([]);
           setPendingAnswers(new Map());
           setCurrentProposal(null);
+          setCurrentDesignMd(null);
           setInterviewThinking(false);
           setInterviewError(null);
           break;
@@ -273,9 +298,13 @@ export default function App() {
   };
 
   const handleInterviewAnswer = (questionId: string, answer: string) => {
-    // Store the answer
+    // Find the question to store its text with the answer
+    const question = questionQueue.find(q => q.id === questionId);
+    const questionText = question?.text || '';
+
+    // Store the answer with question text
     const newAnswers = new Map(pendingAnswers);
-    newAnswers.set(questionId, answer);
+    newAnswers.set(questionId, { question: questionText, answer });
     setPendingAnswers(newAnswers);
 
     // Note: Question and answer messages are added via backend onMessage callback
@@ -287,9 +316,9 @@ export default function App() {
 
     // If no more questions, send all answers to Claude
     if (newQueue.length === 0) {
-      // Combine all answers into a single response
+      // Combine all answers with question context for Claude
       const combinedAnswer = Array.from(newAnswers.entries())
-        .map(([, ans]) => ans)
+        .map(([, { question, answer }]) => `Q: ${question}\nA: ${answer}`)
         .join('\n\n');
       vscode.postMessage({ type: 'answerQuestion', questionId: 'batch', answer: combinedAnswer });
       setPendingAnswers(new Map());
@@ -297,8 +326,19 @@ export default function App() {
     }
   };
 
-  const handleInterviewApprove = (editedRequirementDoc?: string) => {
-    vscode.postMessage({ type: 'approveProposal', editedRequirementDoc });
+  const handleInterviewApprove = (
+    editedRequirementDoc?: string,
+    editedDesignChanges?: string,
+    removedFeatureIndices?: number[],
+    removedTaskIndices?: number[]
+  ) => {
+    vscode.postMessage({
+      type: 'approveProposal',
+      editedRequirementDoc,
+      editedDesignChanges,
+      removedFeatureIndices,
+      removedTaskIndices
+    });
   };
 
   const handleInterviewReject = (feedback: string) => {
@@ -313,6 +353,10 @@ export default function App() {
 
   const handleOpenRequirement = (path: string) => {
     vscode.postMessage({ type: 'openRequirement', path });
+  };
+
+  const handleOpenDesignGuide = () => {
+    vscode.postMessage({ type: 'openDesignGuide' });
   };
 
   const handleDeleteRequirement = (path: string) => {
@@ -361,6 +405,10 @@ export default function App() {
   const handleParserModelChange = (model: string) => {
     setParserModel(model);
     vscode.postMessage({ type: 'setParserModel', model });
+  };
+
+  const handleUpdateProject = (updates: Partial<Project>) => {
+    vscode.postMessage({ type: 'updateProject', updates });
   };
 
   // Feature handlers
@@ -464,14 +512,26 @@ export default function App() {
       {/* Shepherd: Section title text-xl font-semibold */}
       <header className="mb-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-neutral-800">Product Cockpit</h1>
-          <button
-            onClick={() => setSettingsOpen(!settingsOpen)}
-            className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
-            title="Settings"
-          >
-            <Settings size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <CockpitIcon size={22} className="text-primary" />
+            <h1 className="text-xl font-semibold text-neutral-800">Product Cockpit</h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAboutOpen(!aboutOpen)}
+              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
+              title="About & Attribution"
+            >
+              <Info size={16} />
+            </button>
+            <button
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
+              title="Settings"
+            >
+              <Settings size={16} />
+            </button>
+          </div>
         </div>
         <p className="text-xs text-neutral-500 mt-1">
           {activeTasks.length} {activeTasks.length === 1 ? 'task' : 'tasks'} • Drag to prioritize
@@ -495,7 +555,34 @@ export default function App() {
                 <X size={16} />
               </button>
             </div>
-            <div>
+            {/* Project Settings */}
+            <div className="mb-4">
+              <label className="text-xs font-medium text-neutral-600 mb-2 block">
+                Project Name
+              </label>
+              <input
+                type="text"
+                value={project?.title || ''}
+                onChange={(e) => handleUpdateProject({ title: e.target.value })}
+                placeholder="My Project"
+                className="w-full px-3 py-2 text-xs text-neutral-800 bg-neutral-0 border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-medium text-neutral-600 mb-2 block">
+                Description
+              </label>
+              <textarea
+                value={project?.description || ''}
+                onChange={(e) => handleUpdateProject({ description: e.target.value })}
+                placeholder="Brief description of your project"
+                rows={2}
+                className="w-full px-3 py-2 text-xs text-neutral-800 bg-neutral-0 border border-neutral-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+              />
+            </div>
+
+            <div className="border-t border-neutral-200 pt-4 mb-4">
               <label className="text-xs font-medium text-neutral-600 mb-2 block">
                 Task Parser Model
               </label>
@@ -514,6 +601,84 @@ export default function App() {
                     <span className="text-neutral-400 ml-2">{model.description}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="border-t border-neutral-200 pt-4">
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-full px-3 py-2 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About modal */}
+      {aboutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-neutral-900/60"
+            onClick={() => setAboutOpen(false)}
+          />
+          <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-80">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <CockpitIcon size={18} className="text-primary" />
+                <h3 className="text-sm font-semibold text-neutral-800">Product Cockpit</h3>
+              </div>
+              <button
+                onClick={() => setAboutOpen(false)}
+                className="text-neutral-400 hover:text-neutral-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-neutral-600 mb-4">
+              A VS Code extension for product managers to manage tasks and requirements when working with AI coding agents.
+            </p>
+            <div className="border-t border-neutral-200 pt-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-2">
+                Attribution
+              </div>
+              <div className="text-xs text-neutral-500 space-y-1.5">
+                <ul className="space-y-1">
+                  <li>
+                    <a
+                      href="https://github.com/HackerNews/API"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Hacker News API
+                    </a>
+                    <span className="text-neutral-400"> — Y Combinator</span>
+                  </li>
+                  <li>
+                    <a
+                      href="https://github.com/15Dkatz/official_joke_api"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Official Joke API
+                    </a>
+                    <span className="text-neutral-400"> — MIT License</span>
+                  </li>
+                  <li>
+                    <a
+                      href="https://lucide.dev"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Lucide Icons
+                    </a>
+                    <span className="text-neutral-400"> — ISC License</span>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -663,6 +828,7 @@ export default function App() {
                 onTaskDelete={handleDelete}
                 onFeatureEdit={handleFeatureEdit}
                 onFeatureDelete={handleFeatureDelete}
+                onOpenRequirement={handleOpenRequirement}
               />
             ))}
 
@@ -766,6 +932,7 @@ export default function App() {
           messages={interviewMessages}
           currentQuestion={currentQuestion}
           proposal={currentProposal}
+          currentDesignMd={currentDesignMd}
           isThinking={interviewThinking}
           error={interviewError}
           awaitingInput={interviewAwaitingInput}

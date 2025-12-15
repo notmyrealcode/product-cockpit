@@ -50,6 +50,7 @@ export interface InterviewProposal {
   requirementPath: string;
   features: { title: string; description: string }[];
   tasks: { title: string; description: string; featureIndex?: number }[];
+  proposedDesignMd?: string;  // Complete proposed design.md content (replaces existing)
 }
 
 export interface InterviewMessage {
@@ -76,7 +77,7 @@ export type ExtensionMessage =
   | { type: 'interviewMessage'; message: InterviewMessage }
   | { type: 'interviewQuestion'; question: InterviewQuestion }
   | { type: 'interviewThinking' }
-  | { type: 'interviewProposal'; proposal: InterviewProposal }
+  | { type: 'interviewProposal'; proposal: InterviewProposal; currentDesignMd?: string }
   | { type: 'interviewComplete'; requirementPath: string }
   | { type: 'interviewError'; error: string }
   | { type: 'interviewCancelled' };
@@ -101,7 +102,7 @@ export type WebviewMessage =
   // Requirements / Interview
   | { type: 'startInterview'; scope: 'project' | 'new-feature' | 'task'; initialInput?: string }
   | { type: 'answerQuestion'; questionId: string; answer: string }
-  | { type: 'approveProposal'; editedRequirementDoc?: string }
+  | { type: 'approveProposal'; editedRequirementDoc?: string; editedDesignChanges?: string; removedFeatureIndices?: number[]; removedTaskIndices?: number[] }
   | { type: 'rejectProposal'; feedback: string }
   | { type: 'cancelInterview' }
   | { type: 'openRequirement'; path: string }

@@ -7,9 +7,10 @@ interface RecordButtonProps {
   onTranscript: (text: string) => void;
   className?: string;
   size?: 'sm' | 'md';
+  rawMode?: boolean;  // If true, returns raw transcript instead of parsed tasks
 }
 
-export function RecordButton({ onTranscript, className, size = 'sm' }: RecordButtonProps) {
+export function RecordButton({ onTranscript, className, size = 'sm', rawMode = false }: RecordButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -25,13 +26,25 @@ export function RecordButton({ onTranscript, className, size = 'sm' }: RecordBut
           setIsProcessing(true);
           break;
         case 'voiceTranscribed':
-          setIsProcessing(false);
-          // Combine tasks into a single transcript
-          if (message.tasks && message.tasks.length > 0) {
-            const text = message.tasks.map((t: { title: string; description: string }) =>
-              t.description ? `${t.title}: ${t.description}` : t.title
-            ).join('\n');
-            onTranscript(text);
+          // Only handle if not in raw mode
+          if (!rawMode) {
+            setIsProcessing(false);
+            // Combine tasks into a single transcript
+            if (message.tasks && message.tasks.length > 0) {
+              const text = message.tasks.map((t: { title: string; description: string }) =>
+                t.description ? `${t.title}: ${t.description}` : t.title
+              ).join('\n');
+              onTranscript(text);
+            }
+          }
+          break;
+        case 'voiceRawTranscript':
+          // Only handle if in raw mode
+          if (rawMode) {
+            setIsProcessing(false);
+            if (message.transcript) {
+              onTranscript(message.transcript);
+            }
           }
           break;
         case 'voiceError':
@@ -48,7 +61,7 @@ export function RecordButton({ onTranscript, className, size = 'sm' }: RecordBut
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onTranscript]);
+  }, [onTranscript, rawMode]);
 
   const handleClick = () => {
     if (isProcessing) return;
@@ -56,7 +69,7 @@ export function RecordButton({ onTranscript, className, size = 'sm' }: RecordBut
     if (isRecording) {
       vscode.postMessage({ type: 'stopRecording' });
     } else {
-      vscode.postMessage({ type: 'startRecording' });
+      vscode.postMessage({ type: 'startRecording', rawMode });
     }
   };
 

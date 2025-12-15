@@ -6,7 +6,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChevronDown, ChevronRight, GripVertical, Play, Pencil, Trash2, Check, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Play, Pencil, Trash2, Check, X, FileText } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui';
 import { cn } from '../lib/utils';
@@ -28,6 +28,7 @@ interface FeatureSectionProps {
   onTaskDelete: (id: string) => void;
   onFeatureEdit?: (id: string, title: string, description: string) => void;
   onFeatureDelete?: (id: string) => void;
+  onOpenRequirement?: (path: string) => void;
 }
 
 export function FeatureSection({
@@ -46,6 +47,7 @@ export function FeatureSection({
   onTaskDelete,
   onFeatureEdit,
   onFeatureDelete,
+  onOpenRequirement,
 }: FeatureSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isEditing, setIsEditing] = useState(false);
@@ -190,6 +192,18 @@ export function FeatureSection({
             {/* Action buttons */}
             {!isUngrouped && (
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                {/* Requirement doc link */}
+                {feature.requirement_path && onOpenRequirement && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onOpenRequirement(feature.requirement_path!)}
+                    className="h-7 w-7 text-neutral-400 hover:text-primary hover:bg-primary/10"
+                    title={`Open requirements: ${feature.requirement_path}`}
+                  >
+                    <FileText size={14} />
+                  </Button>
+                )}
                 {onBuildFeature && tasks.length > 0 && (
                   <Button
                     variant="ghost"

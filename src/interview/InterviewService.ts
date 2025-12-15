@@ -15,6 +15,7 @@ export interface InterviewProposal {
     requirementPath: string;
     features: { title: string; description: string }[];
     tasks: { title: string; description: string; featureIndex?: number }[];
+    proposedDesignMd?: string;  // Complete proposed design.md content (replaces existing)
 }
 
 export interface InterviewMessage {
@@ -29,6 +30,14 @@ export interface InterviewCallbacks {
     onProposal: (proposal: InterviewProposal) => void;
     onComplete: (requirementPath: string) => void;
     onError: (error: string) => void;
+}
+
+export interface InterviewContext {
+    projectTitle?: string;
+    projectDescription?: string;
+    existingFeatures?: { title: string; description: string | null }[];
+    existingRequirements?: { path: string; title: string; summary: string }[];
+    currentDesignMd?: string;  // Empty string means file doesn't exist yet
 }
 
 // JSON Schema for structured output - forces Claude to return valid JSON
@@ -76,7 +85,9 @@ const RESPONSE_SCHEMA = {
                 },
                 required: ['title', 'description']
             }
-        }
+        },
+        // Complete proposed design.md content (full replacement, not append)
+        proposedDesignMd: { type: 'string' }
     },
     required: ['type']
 };
@@ -87,38 +98,86 @@ For questions (ask 2-4 at a time):
 {"type":"questions","questions":[{"id":"q1","text":"Question?","questionType":"choice","options":["A","B"]}]}
 
 For proposal (when you have enough info):
-{"type":"proposal","requirementDoc":"# Title...","requirementPath":"docs/requirements/name.md","features":[],"tasks":[{"title":"Task","description":"..."}]}
+{"type":"proposal","requirementDoc":"# Title...","requirementPath":"docs/requirements/name.md","features":[],"tasks":[{"title":"Task","description":"..."}],"proposedDesignMd":"# Design Guide\\n..."}
 
 Rules:
 - Ask 2-4 questions per round
 - Prefer questionType "choice" with options over "text"
 - Go to proposal when you understand the requirements
-- For task scope: empty features, single task, empty requirementDoc/requirementPath`;
+- For task scope: empty features, single task, empty requirementDoc/requirementPath
+
+Design decisions (design.md scope):
+- design.md is for VISUAL and UI PATTERNS ONLY: colors, typography, spacing, button styles, confirmation behaviors, empty states, loading states
+- Feature logic and behavior (what the feature DOES) belongs in the feature's requirementDoc, NOT in design.md
+- If visual/UI decisions were made, include FULL proposed design.md content in "proposedDesignMd"
+- proposedDesignMd must include ALL existing content you want to keep PLUS your changes (it replaces the file)
+- You will receive the current design.md content - use it as the base for your proposed version
+- Do NOT create standalone "design" tasks - incorporate design into implementation tasks`;
 
 const SYSTEM_PROMPTS = {
     'project': `You are a requirements analyst helping define a project plan.
 
+CRITICAL - ACKNOWLEDGE USER INPUT:
+- If the user already specified details (colors, features, behavior), DO NOT ask about those things again
+- Only ask about things the user has NOT already told you
+- If the user gave enough detail, skip questions and go straight to proposal
+
+CONTEXT:
+- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY (colors, typography, spacing, confirmation behaviors, empty states)
+- Feature logic/behavior goes in the feature's requirementDoc
+- Each feature will have its own requirements file in docs/requirements/
+- The user message may include existing app context - use it to understand the project
+
 APPROACH:
-- Ask 2-4 questions at a time to understand scope, goals, constraints
+- First, acknowledge what the user already specified
+- Only ask about genuinely missing information
 - Prefer multiple-choice questions when possible
-- After getting answers, either ask more questions OR create proposal
-- Don't over-question - 4-6 total questions across 1-2 rounds is usually enough
+- Don't over-question - 2-4 total questions is usually enough
+- Visual/UI patterns → design.md, feature logic/behavior → feature requirements
+
+PROPOSAL REQUIREMENTS:
+- ALWAYS include a non-empty requirementDoc with markdown describing the project
+- ALWAYS include a requirementPath like "docs/requirements/project-name.md"
 
 ${JSON_FORMAT_RULES}`,
 
-    'new-feature': `You are a requirements analyst helping define a new feature.
+    'new-feature': `You are a requirements analyst helping define a new feature for an EXISTING app.
+
+CRITICAL - ACKNOWLEDGE USER INPUT:
+- If the user already specified details (colors, behavior, implementation), DO NOT ask about those things again
+- Only ask about things the user has NOT already told you
+- If the user gave enough detail, skip questions and go straight to proposal
+
+CONTEXT:
+- The user message includes context about the existing app - READ IT CAREFULLY
+- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY (colors, typography, spacing, confirmation behaviors, empty states)
+- Feature logic/behavior goes in the feature's requirementDoc
+- This feature will get its own requirements file in docs/requirements/
 
 APPROACH:
-- Ask 2-4 questions at a time to clarify what they want to build
+- First, acknowledge what the user already specified
+- Only ask about genuinely missing information needed to implement
 - Prefer multiple-choice questions when possible
-- After getting answers, either ask more questions OR create proposal
-- Don't over-question - 3-5 total questions across 1-2 rounds is usually enough
+- Don't over-question - 1-3 questions is usually enough for a feature
+- Visual/UI patterns → design.md, feature logic/behavior → feature requirements
+
+PROPOSAL REQUIREMENTS:
+- ALWAYS include a non-empty requirementDoc with markdown describing the feature
+- ALWAYS include a requirementPath like "docs/requirements/feature-name.md"
 
 ${JSON_FORMAT_RULES}`,
 
     'task': `You are a task analyst helping define a clear, actionable task.
 
 CRITICAL: Tasks are meant to be simple and specific. Most task descriptions are clear enough to propose immediately.
+
+CRITICAL - ACKNOWLEDGE USER INPUT:
+- If the user specified what they want, DO NOT re-ask those details
+- Go straight to proposal if you have enough information
+
+CONTEXT:
+- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY
+- Include implementation details in the task description, not as separate design tasks
 
 APPROACH:
 - If the task is clear (specific action + target), propose immediately without questions
@@ -148,7 +207,8 @@ export class InterviewService {
     async start(
         scope: InterviewScope,
         initialInput: string | undefined,
-        callbacks: InterviewCallbacks
+        callbacks: InterviewCallbacks,
+        context?: InterviewContext
     ): Promise<string> {
         if (this.process) {
             this.stop();
@@ -170,23 +230,92 @@ export class InterviewService {
 
         this.spawnClaudeProcess(false);  // false = new session, not resume
 
+        // Build context section if we have existing app info
+        const contextSection = this.buildContextSection(context);
+
         // Send initial prompt based on scope
-        const contextPrompts: Record<InterviewScope, string> = {
+        const scopeIntros: Record<InterviewScope, string> = {
             'project': 'I want to define requirements and a plan for my project.',
-            'new-feature': 'I want to define requirements for a new feature.',
+            'new-feature': 'I want to add a new feature to my existing app.',
             'task': 'I want to define a task clearly.'
         };
-        const contextPrompt = contextPrompts[scope];
+        const scopeIntro = scopeIntros[scope];
 
-        const userInput = initialInput
-            ? `${contextPrompt}\n\nHere's what I'm thinking:\n${initialInput}`
-            : contextPrompt;
+        // Build full message with context and user input
+        let userMessage = scopeIntro;
 
-        this.sendMessage(userInput);
+        if (contextSection) {
+            userMessage += `\n\n${contextSection}`;
+        }
+
+        if (initialInput) {
+            userMessage += `\n\n## My Request\n${initialInput}`;
+        }
+
+        this.sendMessage(userMessage);
 
         return this.session.id;
     }
 
+    private buildContextSection(context?: InterviewContext): string | null {
+        if (!context) return null;
+
+        const sections: string[] = [];
+
+        // Project info
+        if (context.projectTitle || context.projectDescription) {
+            let projectInfo = '## Existing App';
+            if (context.projectTitle) {
+                projectInfo += `\nProject: ${context.projectTitle}`;
+            }
+            if (context.projectDescription) {
+                projectInfo += `\nDescription: ${context.projectDescription}`;
+            }
+            sections.push(projectInfo);
+        }
+
+        // Existing features
+        if (context.existingFeatures && context.existingFeatures.length > 0) {
+            let featuresInfo = '## Existing Features';
+            for (const feat of context.existingFeatures) {
+                featuresInfo += `\n- ${feat.title}`;
+                if (feat.description) {
+                    featuresInfo += `: ${feat.description}`;
+                }
+            }
+            sections.push(featuresInfo);
+        }
+
+        // Existing requirements - send summaries with file paths
+        if (context.existingRequirements && context.existingRequirements.length > 0) {
+            let reqsInfo = '## Existing Requirements\nThese requirement files exist in the project. Use the summaries to understand context:';
+            for (const req of context.existingRequirements) {
+                reqsInfo += `\n- **${req.title}** (${req.path}): ${req.summary}`;
+            }
+            sections.push(reqsInfo);
+        }
+
+        // Current design guide - always include so Claude knows about design.md
+        if (context.currentDesignMd !== undefined) {
+            if (context.currentDesignMd.trim()) {
+                sections.push(`## Current design.md (docs/requirements/design.md)
+\`\`\`markdown
+${context.currentDesignMd}
+\`\`\`
+
+NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns), include the COMPLETE file content in "proposedDesignMd" - this replaces the existing file.`);
+            } else {
+                sections.push(`## design.md (docs/requirements/design.md)
+The design guide file is currently empty or doesn't exist.
+
+NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns), create a new design guide by including the full content in "proposedDesignMd".`);
+            }
+        }
+
+        return sections.length > 0 ? sections.join('\n\n') : null;
+    }
+
+    
     async resume(
         sessionId: string,
         callbacks: InterviewCallbacks
@@ -204,6 +333,14 @@ export class InterviewService {
         this.scope = session.scope as InterviewScope;
         this.callbacks = callbacks;
         this.buffer = '';
+
+        // Generate new Claude session ID for resumed interview
+        // (We can't restore the original Claude CLI session, so we replay history)
+        this.claudeSessionId = crypto.randomUUID();
+        this.accumulatedRequirements = [];
+        this.lastParsedResponse = null;
+        this.pendingRetry = false;
+        this.retryCount = 0;
 
         // Restore messages from conversation
         if (session.conversation) {
@@ -233,11 +370,12 @@ export class InterviewService {
         this.spawnClaudeProcess();
 
         // Re-send conversation history to Claude
-        if (this.messages.length > 0) {
+        if (this.messages.length > 0 && this.process?.stdin) {
             const history = this.messages
                 .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
                 .join('\n\n');
-            this.process?.stdin?.write(`Continue this conversation:\n\n${history}\n\nPlease continue.\n`);
+            this.process.stdin.write(`Continue this conversation:\n\n${history}\n\nPlease continue.\n`);
+            this.process.stdin.end();  // Claude CLI -p mode needs EOF to process
         }
 
         return true;
@@ -433,38 +571,10 @@ export class InterviewService {
         }
     }
 
-    private assistantBuffer = '';
     private lastParsedResponse: string | null = null;  // Track last parsed response to avoid duplicates
     private accumulatedRequirements: { title: string; description: string }[] = [];  // Accumulate requirements for streaming format
     private pendingRetry = false;  // Flag to retry if Claude outputs unexpected format
     private retryCount = 0;  // Prevent infinite retry loops
-
-    private parseAssistantMessage(text: string): void {
-        this.assistantBuffer += text;
-
-        // Try to parse as complete JSON
-        try {
-            const parsed = JSON.parse(this.assistantBuffer);
-            this.handleParsedResponse(parsed);
-            this.assistantBuffer = '';
-        } catch {
-            // Not complete yet, keep accumulating
-        }
-    }
-
-    private flushAssistantBuffer(): void {
-        if (!this.assistantBuffer.trim()) return;
-
-        // Try to parse the final buffer
-        try {
-            const parsed = JSON.parse(this.assistantBuffer);
-            this.handleParsedResponse(parsed);
-        } catch {
-            // If it's not valid JSON, treat as plain text message
-            this.addAssistantMessage(this.assistantBuffer);
-        }
-        this.assistantBuffer = '';
-    }
 
     private handleParsedResponse(response: Record<string, unknown>): void {
         const type = response.type as string;
@@ -486,12 +596,16 @@ export class InterviewService {
             }
             case 'questions': {
                 // Batch questions format - queue all questions at once
-                const rawQuestions = response.questions as Array<{
+                const rawQuestions = (response.questions as Array<{
                     id: string;
                     text: string;
                     questionType?: string;
                     options?: string[];
-                }>;
+                }>) || [];
+                if (rawQuestions.length === 0) {
+                    console.warn('[InterviewService] Received questions type but no questions array');
+                    break;
+                }
                 this.retryCount = 0;  // Valid response, reset retry counter
                 for (const q of rawQuestions) {
                     const question: InterviewQuestion = {
@@ -510,6 +624,7 @@ export class InterviewService {
                     requirementPath: (response.requirementPath as string) || '',
                     features: (response.features as InterviewProposal['features']) || [],
                     tasks: (response.tasks as InterviewProposal['tasks']) || [],
+                    proposedDesignMd: (response.proposedDesignMd as string) || undefined,
                 };
                 this.accumulatedRequirements = [];  // Clear accumulated
                 this.retryCount = 0;  // Valid response, reset retry counter

@@ -178,10 +178,13 @@ interface Task {
 | `.pmcockpit/.initialized` | Initialization marker |
 | `.pmcockpit/mcp-server.js` | MCP server |
 | `.pmcockpit/.port` | HTTP bridge port |
+| `.pmcockpit/COPILOT.md` | Auto-generated AI context index |
 | `.pmcockpit/whisper/config.json` | Selected model config |
 | `.pmcockpit/whisper/models/*.bin` | Downloaded Whisper models |
 | `.pmcockpit/whisper/bin/` | whisper.cpp binary (Windows) |
 | `docs/requirements/*.md` | Requirement docs |
+| `docs/requirements/design.md` | Global design guide |
+| `CLAUDE.md` | Project instructions for Claude |
 | `.mcp.json` | Claude Code MCP server config |
 | `.claude/settings.json` | Claude Code tool permissions |
 | `out/webview/webview.js` | Bundled React app |
@@ -241,7 +244,7 @@ Manages whisper.cpp binary with smart detection:
 
 Models downloaded from Hugging Face on first use. Stored in `.pmcockpit/whisper/models/`.
 
-### Message Flow
+### Message Flow (Normal Mode)
 1. Webview sends `startRecording` message
 2. Extension starts sox/arecord via AudioRecorder
 3. Extension sends `recordingStarted` to webview (UI shows timer)
@@ -251,6 +254,14 @@ Models downloaded from Hugging Face on first use. Stored in `.pmcockpit/whisper/
 7. Transcript parsed to tasks via `claude --print -p`
 8. Extension sends `voiceTranscribed` with parsed tasks
 9. Webview shows review UI → user confirms → tasks added
+
+### Message Flow (Raw Mode)
+Used in interview inputs where spoken text should be inserted directly without parsing.
+
+1. Webview sends `startRecording` with `rawMode: true`
+2. Steps 2-6 same as normal mode
+3. Extension sends `voiceRawTranscript` with transcript string
+4. Webview inserts text into active input field
 
 ## Requirements Interview
 
@@ -285,3 +296,23 @@ CLI outputs wrapped as `{"type":"result","structured_output":{...}}`
 5. User answers in RequirementsInterview modal
 6. On proposal, user reviews and approves/rejects
 7. Approval triggers: save requirement doc, create features, create tasks
+
+## Project Context
+
+Manages context files that help AI assistants understand the project.
+
+### Files
+| File | Purpose |
+|------|---------|
+| `.pmcockpit/COPILOT.md` | Auto-generated index of requirements and features |
+| `docs/requirements/design.md` | Global design guide for UI patterns |
+| `CLAUDE.md` | Project instructions with reference to COPILOT.md |
+
+### ProjectContext (`src/context/ProjectContext.ts`)
+Initializes on extension activation:
+1. Creates `.pmcockpit/` and `docs/requirements/` directories
+2. Generates `COPILOT.md` with requirements index and feature list
+3. Creates `design.md` template if missing
+4. Creates or updates `CLAUDE.md` with reference to COPILOT.md
+
+Updates `COPILOT.md` whenever features change via `updateCopilotMd()`.
