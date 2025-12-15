@@ -104,7 +104,7 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
         'bg-neutral-0 border border-neutral-200 rounded-md p-4',
         'transition-fast',
         'hover:border-neutral-300 hover:bg-neutral-50',
-        isDragging && 'shadow-drag border-primary bg-neutral-0'
+        isDragging && 'opacity-50 border-dashed border-primary'
       )}
     >
       {isEditing ? (

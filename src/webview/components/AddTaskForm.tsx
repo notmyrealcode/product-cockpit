@@ -1,15 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from './ui';
+import { RecordButton } from './RecordButton';
 
 interface AddTaskFormProps {
   onAdd: (title: string, description: string) => void;
   onCancel?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
+  showRecord?: boolean;
 }
 
-export function AddTaskForm({ onAdd, onCancel, placeholder = 'New task...', autoFocus = false }: AddTaskFormProps) {
+export function AddTaskForm({
+  onAdd,
+  onCancel,
+  placeholder = 'New task...',
+  autoFocus = false,
+  showRecord = false
+}: AddTaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isExpanded, setIsExpanded] = useState(autoFocus);
@@ -52,9 +60,34 @@ export function AddTaskForm({ onAdd, onCancel, placeholder = 'New task...', auto
     }
   };
 
+  const handleTranscript = (text: string) => {
+    // Use transcript as title (truncate if too long)
+    const lines = text.split('\n');
+    if (lines.length > 1) {
+      setTitle(lines[0].slice(0, 100));
+      setDescription(lines.slice(1).join('\n'));
+      setIsExpanded(true);
+    } else {
+      setTitle(text.slice(0, 100));
+      if (text.length > 100) {
+        setDescription(text);
+        setIsExpanded(true);
+      }
+    }
+    titleInputRef.current?.focus();
+  };
+
   return (
-    <form onSubmit={handleSubmit} onBlur={handleBlur} onKeyDown={handleKeyDown} className={onCancel ? '' : 'mb-3 bg-neutral-0 border border-neutral-200 rounded-md p-2'}>
+    <form
+      onSubmit={handleSubmit}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      className={onCancel ? '' : 'mb-3 bg-neutral-0 border border-neutral-200 rounded-md p-2'}
+    >
       <div className="flex gap-1.5">
+        {showRecord && (
+          <RecordButton onTranscript={handleTranscript} size="sm" />
+        )}
         <input
           ref={titleInputRef}
           type="text"

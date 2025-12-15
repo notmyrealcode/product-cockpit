@@ -4,7 +4,7 @@ import * as path from 'path';
 import { TaskStore } from '../tasks/TaskStore';
 import { WhisperService } from '../voice/WhisperService';
 import { AudioRecorder } from '../voice/AudioRecorder';
-import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage } from '../interview/InterviewService';
+import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage, InterviewScope } from '../interview/InterviewService';
 import type { Task } from '../tasks/types';
 
 interface Requirement {
@@ -24,7 +24,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private buildTaskIds?: Set<string>;
     private buildStatusListener?: vscode.Disposable;
     private currentProposal?: InterviewProposal;
-    private interviewScope?: 'project' | 'new-feature';
+    private interviewScope?: InterviewScope;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -120,7 +120,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         this.interviewService.answerQuestion(message.questionId, message.answer);
                         break;
                     case 'approveProposal':
-                        this.handleApproveProposal();
+                        this.handleApproveProposal(message.editedRequirementDoc);
                         break;
                     case 'rejectProposal':
                         this.interviewService.rejectProposal(message.feedback);
@@ -130,6 +130,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         break;
                     case 'openRequirement':
                         this.openRequirement(message.path);
+                        break;
+                    case 'deleteRequirement':
+                        this.deleteRequirement(message.path);
                         break;
                     case 'startRecording':
                         this.handleStartRecording();
@@ -255,7 +258,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private async handleStartInterview(scope: 'project' | 'new-feature', initialInput?: string): Promise<void> {
+    private async deleteRequirement(reqPath: string): Promise<void> {
+        const fullPath = path.join(this.workspaceRoot, reqPath);
+        try {
+            await fs.promises.unlink(fullPath);
+            vscode.window.showInformationMessage(`Deleted ${path.basename(reqPath)}`);
+            // File watcher will trigger sendRequirements automatically
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to delete requirement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    private async handleStartInterview(scope: InterviewScope, initialInput?: string): Promise<void> {
         this.interviewScope = scope;
         this.currentProposal = undefined;
 
@@ -327,30 +341,39 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async handleApproveProposal(): Promise<void> {
+    private async handleApproveProposal(editedRequirementDoc?: string): Promise<void> {
         if (!this.currentProposal) {
             return;
         }
 
         try {
-            // 1. Save requirement document
-            const reqPath = path.join(this.workspaceRoot, this.currentProposal.requirementPath);
-            const reqDir = path.dirname(reqPath);
-            await fs.promises.mkdir(reqDir, { recursive: true });
-            await fs.promises.writeFile(reqPath, this.currentProposal.requirementDoc, 'utf-8');
+            const isTaskScope = this.interviewScope === 'task';
+            let savedReqPath: string | undefined;
+
+            // 1. Save requirement document (only for project/feature scope)
+            if (!isTaskScope && this.currentProposal.requirementPath) {
+                const docContent = editedRequirementDoc || this.currentProposal.requirementDoc;
+                const reqPath = path.join(this.workspaceRoot, this.currentProposal.requirementPath);
+                const reqDir = path.dirname(reqPath);
+                await fs.promises.mkdir(reqDir, { recursive: true });
+                await fs.promises.writeFile(reqPath, docContent, 'utf-8');
+                savedReqPath = this.currentProposal.requirementPath;
+            }
 
             // 2. Create features and tasks
             const featureIdMap: Map<number, string> = new Map();
 
-            // Create features first
-            for (let i = 0; i < this.currentProposal.features.length; i++) {
-                const feat = this.currentProposal.features[i];
-                const feature = this.taskStore.createFeature({
-                    title: feat.title,
-                    description: feat.description,
-                    requirement_path: this.currentProposal.requirementPath
-                });
-                featureIdMap.set(i, feature.id);
+            // Create features first (only for non-task scope)
+            if (!isTaskScope) {
+                for (let i = 0; i < this.currentProposal.features.length; i++) {
+                    const feat = this.currentProposal.features[i];
+                    const feature = this.taskStore.createFeature({
+                        title: feat.title,
+                        description: feat.description,
+                        requirement_path: this.currentProposal.requirementPath
+                    });
+                    featureIdMap.set(i, feature.id);
+                }
             }
 
             // Create tasks
@@ -368,7 +391,6 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             // Save counts before clearing
             const featureCount = featureIdMap.size;
             const taskCount = this.currentProposal.tasks.length;
-            const savedReqPath = this.currentProposal.requirementPath;
 
             // Mark interview complete
             this.interviewService.complete();
@@ -378,16 +400,23 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'interviewComplete',
-                    requirementPath: savedReqPath
+                    requirementPath: savedReqPath || ''
                 });
             }
 
             // Refresh requirements list
-            this.sendRequirements();
+            if (savedReqPath) {
+                this.sendRequirements();
+            }
 
-            vscode.window.showInformationMessage(
-                `Created ${featureCount} feature(s) and ${taskCount} task(s)`
-            );
+            // Show appropriate message
+            if (isTaskScope) {
+                vscode.window.showInformationMessage(`Created ${taskCount} task(s)`);
+            } else {
+                vscode.window.showInformationMessage(
+                    `Created ${featureCount} feature(s) and ${taskCount} task(s)`
+                );
+            }
         } catch (error) {
             if (this._view) {
                 this._view.webview.postMessage({
@@ -762,7 +791,12 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     if (code === 0) {
                         resolve(output);
                     } else {
-                        reject(new Error(errorOutput || `Exit code ${code}`));
+                        // Check for terms acceptance required
+                        if (errorOutput.includes('[ACTION REQUIRED]') && errorOutput.includes('Terms')) {
+                            reject(new Error('Claude CLI requires you to accept updated terms. Please run "claude" in your terminal first.'));
+                        } else {
+                            reject(new Error(errorOutput || `Exit code ${code}`));
+                        }
                     }
                 });
 

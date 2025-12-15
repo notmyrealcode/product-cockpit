@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", ".vscode-test", "src/webview"]
+  "exclude": ["node_modules", ".vscode-test", "src/webview", "vitest.config.ts", "**/*.test.ts"]
 }

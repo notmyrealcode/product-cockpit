@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragOverEvent,
+  DragOverlay,
   DragStartEvent,
 } from '@dnd-kit/core';
 import {
@@ -19,11 +19,12 @@ import {
 import { vscode } from './lib/vscode';
 import { TaskList } from './components/TaskList';
 import { FeatureSection } from './components/FeatureSection';
+import { TaskCard } from './components/TaskCard';
 import { AddTaskForm } from './components/AddTaskForm';
-import { VoiceCapture } from './components/VoiceCapture';
 import { RequirementsList } from './components/RequirementsList';
 import { RequirementsInterview } from './components/RequirementsInterview';
 import { AddMenu } from './components/AddMenu';
+import { RecordButton } from './components/RecordButton';
 import { Button } from './components/ui';
 import { Play, ChevronDown, ChevronRight, X, Settings } from 'lucide-react';
 import type { Task, Feature, Requirement, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
@@ -62,12 +63,23 @@ export default function App() {
 
   // Interview state
   const [interviewActive, setInterviewActive] = useState(false);
-  const [interviewScope, setInterviewScope] = useState<'project' | 'new-feature'>('new-feature');
+  const [interviewAwaitingInput, setInterviewAwaitingInput] = useState(false);
+  const [interviewScope, setInterviewScope] = useState<'project' | 'new-feature' | 'task'>('new-feature');
   const [interviewMessages, setInterviewMessages] = useState<InterviewMessage[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<InterviewQuestion | null>(null);
+  const [questionQueue, setQuestionQueue] = useState<InterviewQuestion[]>([]);
+  const [pendingAnswers, setPendingAnswers] = useState<Map<string, string>>(new Map());
   const [currentProposal, setCurrentProposal] = useState<InterviewProposal | null>(null);
   const [interviewThinking, setInterviewThinking] = useState(false);
   const [interviewError, setInterviewError] = useState<string | null>(null);
+
+  // Refs to access current state in event handlers (avoid stale closures)
+  const interviewScopeRef = useRef(interviewScope);
+  const interviewMessagesRef = useRef(interviewMessages);
+  useEffect(() => { interviewScopeRef.current = interviewScope; }, [interviewScope]);
+  useEffect(() => { interviewMessagesRef.current = interviewMessages; }, [interviewMessages]);
+
+  // Current question is first in queue
+  const currentQuestion = questionQueue.length > 0 ? questionQueue[0] : null;
 
   // DnD sensors
   const sensors = useSensors(
@@ -101,19 +113,11 @@ export default function App() {
     return grouped;
   }, [features, activeTasks]);
 
-  // All draggable items (features + tasks)
-  const allDraggableIds = useMemo(() => {
-    const ids: string[] = [];
-    features.forEach(f => {
-      ids.push(f.id);
-      const featureTasks = tasksByFeature.get(f.id) || [];
-      featureTasks.forEach(t => ids.push(t.id));
-    });
-    // Add ungrouped tasks
-    const ungroupedTasks = tasksByFeature.get(UNGROUPED_FEATURE.id) || [];
-    ungroupedTasks.forEach(t => ids.push(t.id));
-    return ids;
-  }, [features, tasksByFeature]);
+  // Feature IDs for top-level sorting (features only, not tasks)
+  // Tasks are sorted within their own SortableContext inside FeatureSection
+  const featureIds = useMemo(() => {
+    return features.map(f => f.id);
+  }, [features]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<ExtensionMessage>) => {
@@ -153,32 +157,58 @@ export default function App() {
         // Interview messages
         case 'interviewStarted':
           setInterviewActive(true);
-          setInterviewScope(message.scope as 'project' | 'new-feature');
+          setInterviewAwaitingInput(false);
+          setInterviewScope(message.scope as 'project' | 'new-feature' | 'task');
           setInterviewMessages([]);
-          setCurrentQuestion(null);
+          setQuestionQueue([]);
+          setPendingAnswers(new Map());
           setCurrentProposal(null);
           setInterviewError(null);
+          setInterviewThinking(true);
           break;
         case 'interviewMessage':
-          setInterviewMessages(prev => [...prev, message.message]);
+          // Deduplicate by checking if last message has same role+content
+          setInterviewMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg &&
+                lastMsg.role === message.message.role &&
+                lastMsg.content === message.message.content) {
+              return prev; // Skip duplicate
+            }
+            return [...prev, message.message];
+          });
           break;
         case 'interviewQuestion':
-          setCurrentQuestion(message.question);
+          // Add to queue instead of replacing
+          setQuestionQueue(prev => [...prev, message.question]);
           setInterviewThinking(false);
           break;
         case 'interviewThinking':
           setInterviewThinking(true);
           break;
         case 'interviewProposal':
-          setCurrentProposal(message.proposal);
-          setCurrentQuestion(null);
-          setInterviewThinking(false);
+          // For task scope with no questions asked, auto-approve immediately
+          // Use refs to get current values (avoid stale closure)
+          const hasAssistantMessages = interviewMessagesRef.current.some(m => m.role === 'assistant');
+          if (interviewScopeRef.current === 'task' && !hasAssistantMessages) {
+            // Auto-create the task without showing the modal
+            setInterviewActive(false);
+            setInterviewAwaitingInput(false);
+            setInterviewThinking(false);
+            vscode.postMessage({ type: 'approveProposal' });
+          } else {
+            setCurrentProposal(message.proposal);
+            setQuestionQueue([]);  // Clear queue when proposal received
+            setInterviewThinking(false);
+          }
           break;
         case 'interviewComplete':
         case 'interviewCancelled':
           setInterviewActive(false);
+          setInterviewAwaitingInput(false);
           setInterviewMessages([]);
-          setCurrentQuestion(null);
+          setQuestionQueue([]);
+          setPendingAnswers(new Map());
           setCurrentProposal(null);
           setInterviewThinking(false);
           setInterviewError(null);
@@ -187,7 +217,7 @@ export default function App() {
           setInterviewError(message.error);
           setInterviewThinking(false);
           break;
-        // voiceTranscribed and voiceError are handled by VoiceCapture component directly
+        // voiceTranscribed and voiceError are handled by RecordButton component
       }
     };
 
@@ -225,18 +255,50 @@ export default function App() {
     vscode.postMessage({ type: 'archiveDone' });
   };
 
-  const handleStartInterview = (scope: 'project' | 'new-feature' = 'new-feature', initialInput?: string) => {
-    vscode.postMessage({ type: 'startInterview', scope, initialInput });
+  const handleShowInterviewModal = (scope: 'project' | 'new-feature' | 'task') => {
+    setInterviewScope(scope);
+    setInterviewActive(true);
+    setInterviewAwaitingInput(true);
+    setInterviewMessages([]);
+    setQuestionQueue([]);
+    setPendingAnswers(new Map());
+    setCurrentProposal(null);
+    setInterviewError(null);
+  };
+
+  const handleStartInterview = (initialInput: string) => {
+    setInterviewAwaitingInput(false);
+    setInterviewThinking(true);
+    vscode.postMessage({ type: 'startInterview', scope: interviewScope, initialInput });
   };
 
   const handleInterviewAnswer = (questionId: string, answer: string) => {
-    vscode.postMessage({ type: 'answerQuestion', questionId, answer });
-    setCurrentQuestion(null);
-    setInterviewThinking(true);
+    // Store the answer
+    const newAnswers = new Map(pendingAnswers);
+    newAnswers.set(questionId, answer);
+    setPendingAnswers(newAnswers);
+
+    // Note: Question and answer messages are added via backend onMessage callback
+    // Don't add them here to avoid duplicates
+
+    // Remove from queue
+    const newQueue = questionQueue.filter(q => q.id !== questionId);
+    setQuestionQueue(newQueue);
+
+    // If no more questions, send all answers to Claude
+    if (newQueue.length === 0) {
+      // Combine all answers into a single response
+      const combinedAnswer = Array.from(newAnswers.entries())
+        .map(([, ans]) => ans)
+        .join('\n\n');
+      vscode.postMessage({ type: 'answerQuestion', questionId: 'batch', answer: combinedAnswer });
+      setPendingAnswers(new Map());
+      setInterviewThinking(true);
+    }
   };
 
-  const handleInterviewApprove = () => {
-    vscode.postMessage({ type: 'approveProposal' });
+  const handleInterviewApprove = (editedRequirementDoc?: string) => {
+    vscode.postMessage({ type: 'approveProposal', editedRequirementDoc });
   };
 
   const handleInterviewReject = (feedback: string) => {
@@ -253,10 +315,8 @@ export default function App() {
     vscode.postMessage({ type: 'openRequirement', path });
   };
 
-  const handleVoiceTasksCreated = (voiceTasks: { title: string; description: string }[]) => {
-    voiceTasks.forEach(task => {
-      vscode.postMessage({ type: 'addTask', title: task.title, description: task.description });
-    });
+  const handleDeleteRequirement = (path: string) => {
+    vscode.postMessage({ type: 'deleteRequirement', path });
   };
 
   const handleSelectTask = (id: string, selected: boolean) => {
@@ -472,7 +532,9 @@ export default function App() {
             setShowAddTask(true);
           }}
           onAddFeature={() => setShowAddFeature(true)}
-          onNewFeatureWithRequirements={() => handleStartInterview('new-feature')}
+          onInterviewTask={() => handleShowInterviewModal('task')}
+          onInterviewFeature={() => handleShowInterviewModal('new-feature')}
+          onInterviewProject={() => handleShowInterviewModal('project')}
         />
       </div>
 
@@ -491,6 +553,7 @@ export default function App() {
             }}
             onCancel={() => setShowAddTask(false)}
             placeholder={addTaskType === 'bug' ? 'Bug title...' : 'Task title...'}
+            showRecord
           />
         </div>
       )}
@@ -502,6 +565,10 @@ export default function App() {
             <span className="text-xs font-medium text-neutral-600">New Feature</span>
           </div>
           <div className="flex gap-2">
+            <RecordButton
+              onTranscript={(text) => setNewFeatureTitle(text.slice(0, 100))}
+              size="sm"
+            />
             <input
               type="text"
               value={newFeatureTitle}
@@ -523,8 +590,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      <VoiceCapture onTasksCreated={handleVoiceTasksCreated} />
 
       {/* Selection actions bar */}
       {activeTasks.length > 0 && (
@@ -579,7 +644,7 @@ export default function App() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={allDraggableIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={featureIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-4">
             {/* Features */}
             {features.map((feature) => (
@@ -627,6 +692,28 @@ export default function App() {
             )}
           </div>
         </SortableContext>
+
+        {/* Drag overlay - renders dragged item above everything */}
+        <DragOverlay>
+          {activeTaskId ? (
+            <div className="opacity-90">
+              {(() => {
+                const task = tasks.find(t => t.id === activeTaskId);
+                if (!task) return null;
+                return (
+                  <TaskCard
+                    task={task}
+                    selected={selectedTaskIds.has(task.id)}
+                    onStatusChange={() => {}}
+                    onTitleChange={() => {}}
+                    onDescriptionChange={() => {}}
+                    onDelete={() => {}}
+                  />
+                );
+              })()}
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Archive section for done tasks */}
@@ -668,7 +755,8 @@ export default function App() {
         requirements={requirements}
         tasks={tasks}
         onOpenRequirement={handleOpenRequirement}
-        onStartInterview={() => handleStartInterview('new-feature')}
+        onDeleteRequirement={handleDeleteRequirement}
+        onStartInterview={() => handleShowInterviewModal('new-feature')}
       />
 
       {/* Requirements Interview Modal */}
@@ -680,6 +768,8 @@ export default function App() {
           proposal={currentProposal}
           isThinking={interviewThinking}
           error={interviewError}
+          awaitingInput={interviewAwaitingInput}
+          onStart={handleStartInterview}
           onAnswer={handleInterviewAnswer}
           onApprove={handleInterviewApprove}
           onReject={handleInterviewReject}

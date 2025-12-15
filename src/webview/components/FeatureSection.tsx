@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -54,7 +55,7 @@ export function FeatureSection({
   const {
     attributes,
     listeners,
-    setNodeRef,
+    setNodeRef: setSortableRef,
     transform,
     transition,
     isDragging,
@@ -62,6 +63,17 @@ export function FeatureSection({
     id: feature.id,
     disabled: isUngrouped,
   });
+
+  // Make the feature a drop target for tasks
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: feature.id,
+  });
+
+  // Combine refs
+  const setNodeRef = (node: HTMLElement | null) => {
+    setSortableRef(node);
+    setDroppableRef(node);
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -90,7 +102,8 @@ export function FeatureSection({
       style={style}
       className={cn(
         'border border-neutral-200 rounded-lg bg-neutral-0 overflow-hidden',
-        isDragging && 'shadow-drag border-primary'
+        isDragging && 'shadow-drag border-primary',
+        isOver && !isDragging && 'border-primary bg-primary/5'
       )}
     >
       {/* Feature Header */}

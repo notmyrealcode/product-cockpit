@@ -1,11 +1,12 @@
-import React from 'react';
-import { FileText, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Plus, Trash2 } from 'lucide-react';
 import type { Requirement, Task } from '../types';
 
 interface RequirementsListProps {
   requirements: Requirement[];
   tasks: Task[];
   onOpenRequirement: (path: string) => void;
+  onDeleteRequirement: (path: string) => void;
   onStartInterview: () => void;
 }
 
@@ -13,11 +14,24 @@ export function RequirementsList({
   requirements,
   tasks,
   onOpenRequirement,
+  onDeleteRequirement,
   onStartInterview
 }: RequirementsListProps) {
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
   // Count tasks linked to each requirement
   const getLinkedTaskCount = (reqPath: string) => {
     return tasks.filter(t => t.requirementPath === reqPath).length;
+  };
+
+  const handleDelete = (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirmDelete === path) {
+      onDeleteRequirement(path);
+      setConfirmDelete(null);
+    } else {
+      setConfirmDelete(path);
+    }
   };
 
   return (
@@ -42,29 +56,46 @@ export function RequirementsList({
         <div className="space-y-2">
           {requirements.map((req) => {
             const linkedCount = getLinkedTaskCount(req.path);
+            const isConfirming = confirmDelete === req.path;
             return (
-              <button
+              <div
                 key={req.path}
-                onClick={() => onOpenRequirement(req.path)}
-                className="w-full text-left p-3 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+                className="group relative flex items-center bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
               >
-                <div className="flex items-start gap-2">
-                  <FileText size={16} className="text-neutral-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-neutral-800 truncate">
-                      {req.title}
-                    </div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
-                      {req.path}
-                      {linkedCount > 0 && (
-                        <span className="ml-2 text-primary">
-                          {linkedCount} {linkedCount === 1 ? 'task' : 'tasks'}
-                        </span>
-                      )}
+                <button
+                  onClick={() => onOpenRequirement(req.path)}
+                  className="flex-1 text-left p-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <FileText size={16} className="text-neutral-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-neutral-800 truncate">
+                        {req.title}
+                      </div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
+                        {req.path}
+                        {linkedCount > 0 && (
+                          <span className="ml-2 text-primary">
+                            {linkedCount} {linkedCount === 1 ? 'task' : 'tasks'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                <button
+                  onClick={(e) => handleDelete(req.path, e)}
+                  onBlur={() => setConfirmDelete(null)}
+                  className={`p-2 mr-2 rounded transition-colors ${
+                    isConfirming
+                      ? 'bg-danger text-white'
+                      : 'text-neutral-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100'
+                  }`}
+                  title={isConfirming ? 'Click again to confirm' : 'Delete requirement'}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             );
           })}
         </div>

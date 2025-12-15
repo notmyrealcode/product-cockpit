@@ -99,12 +99,13 @@ export type WebviewMessage =
   | { type: 'moveTask'; taskId: string; featureId: string | null }
   | { type: 'archiveDone' }
   // Requirements / Interview
-  | { type: 'startInterview'; scope: 'project' | 'new-feature'; initialInput?: string }
+  | { type: 'startInterview'; scope: 'project' | 'new-feature' | 'task'; initialInput?: string }
   | { type: 'answerQuestion'; questionId: string; answer: string }
-  | { type: 'approveProposal' }
+  | { type: 'approveProposal'; editedRequirementDoc?: string }
   | { type: 'rejectProposal'; feedback: string }
   | { type: 'cancelInterview' }
   | { type: 'openRequirement'; path: string }
+  | { type: 'deleteRequirement'; path: string }
   // Voice & Build
   | { type: 'startRecording' }
   | { type: 'stopRecording' }
