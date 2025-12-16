@@ -1,32 +1,23 @@
 import React, { useState } from 'react';
-import { FileText, Plus, Trash2, Palette, Pencil } from 'lucide-react';
-import type { Requirement, Task } from '../types';
+import { FileText, Trash2, Palette, Pencil } from 'lucide-react';
+import type { Requirement } from '../types';
 
 interface RequirementsListProps {
   requirements: Requirement[];
-  tasks: Task[];
   onOpenRequirement: (path: string) => void;
   onDeleteRequirement: (path: string) => void;
-  onStartInterview: () => void;
 }
 
 export function RequirementsList({
   requirements,
-  tasks,
   onOpenRequirement,
-  onDeleteRequirement,
-  onStartInterview
+  onDeleteRequirement
 }: RequirementsListProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Separate design.md from other requirements
   const designReq = requirements.find(r => r.path === 'docs/requirements/design.md');
   const otherRequirements = requirements.filter(r => r.path !== 'docs/requirements/design.md');
-
-  // Count tasks linked to each requirement
-  const getLinkedTaskCount = (reqPath: string) => {
-    return tasks.filter(t => t.requirementPath === reqPath).length;
-  };
 
   const handleDelete = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -43,13 +34,6 @@ export function RequirementsList({
       {/* Shepherd: Section title text-base font-medium */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-base font-medium text-neutral-800">Requirements</h2>
-        <button
-          onClick={onStartInterview}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors"
-        >
-          <Plus size={14} />
-          New
-        </button>
       </div>
 
       <div className="space-y-2">
@@ -81,11 +65,10 @@ export function RequirementsList({
         {/* Other requirements */}
         {otherRequirements.length === 0 && !designReq ? (
           <div className="text-sm text-neutral-500 py-4 text-center border border-dashed border-neutral-200 rounded-md">
-            No requirements yet. Click "New" to start an interview with Claude.
+            No requirements yet. Use the Add menu to create a feature.
           </div>
         ) : (
           otherRequirements.map((req) => {
-            const linkedCount = getLinkedTaskCount(req.path);
             const isConfirming = confirmDelete === req.path;
             return (
               <div
@@ -104,11 +87,6 @@ export function RequirementsList({
                       </div>
                       <div className="text-xs text-neutral-500 mt-0.5">
                         {req.path}
-                        {linkedCount > 0 && (
-                          <span className="ml-2 text-primary">
-                            {linkedCount} {linkedCount === 1 ? 'task' : 'tasks'}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>

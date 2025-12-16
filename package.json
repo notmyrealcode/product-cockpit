@@ -1,7 +1,7 @@
 {
-  "name": "product-cockpit",
-  "displayName": "Product Cockpit",
-  "description": "Task management for AI coding agents",
+  "name": "shepherd",
+  "displayName": "Shepherd",
+  "description": "Product copilot for AI coding agents",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.85.0"
@@ -18,14 +18,14 @@
       "activitybar": [
         {
           "id": "pmcockpit-shortcut",
-          "title": "Product Cockpit",
+          "title": "Shepherd",
           "icon": "resources/icon.svg"
         }
       ],
       "secondarySidebar": [
         {
           "id": "pmcockpit",
-          "title": "Product Cockpit",
+          "title": "Shepherd",
           "icon": "resources/icon.svg"
         }
       ]
@@ -42,7 +42,7 @@
       "pmcockpit-shortcut": [
         {
           "id": "pmcockpit.shortcutView",
-          "name": "Product Cockpit",
+          "name": "Shepherd",
           "when": "pmcockpit.initialized"
         }
       ]
@@ -50,14 +50,14 @@
     "commands": [
       {
         "command": "pmcockpit.initialize",
-        "title": "Product Cockpit: Initialize"
+        "title": "Shepherd: Initialize"
       },
       {
         "command": "pmcockpit.openSidebar",
-        "title": "Open Product Cockpit",
+        "title": "Open Shepherd",
         "icon": {
-          "light": "resources/icon.svg",
-          "dark": "resources/icon.svg"
+          "light": "resources/icon-color.png",
+          "dark": "resources/icon-color.png"
         }
       }
     ],
@@ -71,7 +71,7 @@
       ]
     },
     "configuration": {
-      "title": "Product Cockpit",
+      "title": "Shepherd",
       "properties": {
         "pmcockpit.parserModel": {
           "type": "string",

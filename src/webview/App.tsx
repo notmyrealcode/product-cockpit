@@ -28,21 +28,8 @@ import { RecordButton } from './components/RecordButton';
 import { Button } from './components/ui';
 import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
 
-// Custom cockpit icon matching extension icon
-function CockpitIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-      <path d="M6 12 A6 6 0 0 1 18 12" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      <line x1="12" y1="12" x2="16" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-      <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-      <path d="M18 4 L18.5 5.5 L20 6 L18.5 6.5 L18 8 L17.5 6.5 L16 6 L17.5 5.5 Z" fill="currentColor"/>
-      <circle cx="7" cy="10" r="1" fill="currentColor"/>
-      <circle cx="9" cy="7.5" r="1" fill="currentColor"/>
-      <circle cx="12" cy="6" r="1" fill="currentColor"/>
-    </svg>
-  );
-}
+// Shepherd logo
+import shepherdLogo from './assets/logo.png';
 import type { Task, Feature, Requirement, Project, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
 
 const PARSER_MODELS = [
@@ -54,7 +41,7 @@ const PARSER_MODELS = [
 // Virtual feature for ungrouped tasks
 const UNGROUPED_FEATURE: Feature = {
   id: '__ungrouped__',
-  title: 'Ungrouped',
+  title: 'Tasks',
   description: null,
   requirement_path: null,
   priority: 999999,
@@ -513,8 +500,8 @@ export default function App() {
       <header className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CockpitIcon size={22} className="text-primary" />
-            <h1 className="text-xl font-semibold text-neutral-800">Product Cockpit</h1>
+            <img src={shepherdLogo} alt="Shepherd" className="h-6 w-6" />
+            <h1 className="text-xl font-semibold text-neutral-800">Shepherd</h1>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -626,8 +613,8 @@ export default function App() {
           <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-80">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <CockpitIcon size={18} className="text-primary" />
-                <h3 className="text-sm font-semibold text-neutral-800">Product Cockpit</h3>
+                <img src={shepherdLogo} alt="Shepherd" className="h-5 w-5" />
+                <h3 className="text-sm font-semibold text-neutral-800">Shepherd</h3>
               </div>
               <button
                 onClick={() => setAboutOpen(false)}
@@ -811,7 +798,6 @@ export default function App() {
       >
         <SortableContext items={featureIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-4">
-            {/* Features */}
             {features.map((feature) => (
               <FeatureSection
                 key={feature.id}
@@ -888,6 +874,7 @@ export default function App() {
           <button
             onClick={() => setArchiveExpanded(!archiveExpanded)}
             className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 mb-3"
+            title={archiveExpanded ? "Hide completed tasks" : "Show completed tasks"}
           >
             {archiveExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             <span>Done ({doneTasks.length})</span>
@@ -898,6 +885,7 @@ export default function App() {
                 <button
                   onClick={handleArchiveDone}
                   className="text-xs text-neutral-500 hover:text-danger"
+                  title="Permanently delete all completed tasks"
                 >
                   Delete all done
                 </button>
@@ -919,10 +907,8 @@ export default function App() {
 
       <RequirementsList
         requirements={requirements}
-        tasks={tasks}
         onOpenRequirement={handleOpenRequirement}
         onDeleteRequirement={handleDeleteRequirement}
-        onStartInterview={() => handleShowInterviewModal('new-feature')}
       />
 
       {/* Requirements Interview Modal */}

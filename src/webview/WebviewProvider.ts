@@ -567,10 +567,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 });
             }
 
-            // Refresh requirements list
-            if (savedReqPath) {
-                this.sendRequirements();
-            }
+            // Always refresh requirements list after approval
+            this.sendRequirements();
 
             // Show appropriate message
             if (isTaskScope) {
@@ -1072,9 +1070,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; media-src blob:; connect-src https://hacker-news.firebaseio.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:; media-src blob:; connect-src https://hacker-news.firebaseio.com;">
     <link href="${styleUri}" rel="stylesheet">
-    <title>Product Cockpit</title>
+    <title>Shepherd</title>
 </head>
 <body>
     <div id="root"></div>

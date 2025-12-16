@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Pencil, Check, X, ChevronDown, Play, Bug } from 'lucide-react';
 import { Button } from './ui';
+import { Tooltip } from './Tooltip';
 import { cn } from '../lib/utils';
 import type { Task, TaskStatus } from '../types';
 
@@ -198,17 +199,19 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
           <div className="flex-1 min-w-0">
             {/* Task title */}
             <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">
+                {task.type === 'bug' ? 'Bug' : 'Task'}
+              </span>
               {task.type === 'bug' && (
-                <Bug size={14} className="text-danger flex-shrink-0" title="Bug" />
+                <Bug size={14} className="text-danger flex-shrink-0" />
               )}
               <p
                 className="text-sm font-semibold text-neutral-800 leading-snug cursor-pointer hover:text-primary"
                 onClick={handleStartEdit}
-                title="Click to edit"
               >
                 {task.title}
               </p>
-              <span className="text-[10px] font-mono text-neutral-400" title={`ID: ${task.id}`}>
+              <span className="text-[10px] font-mono text-neutral-400">
                 #{task.id.slice(0, 4)}
               </span>
             </div>
@@ -241,41 +244,46 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
             {/* Action buttons */}
             <div className="flex items-center gap-1">
               {onBuild && (
+                <Tooltip content={buildDisabled ? "Build in progress..." : "Send to Claude Code"}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onBuild(task.id)}
+                    disabled={buildDisabled}
+                    className={cn(
+                      "h-8 w-8",
+                      buildDisabled
+                        ? "text-neutral-200 cursor-not-allowed"
+                        : "text-neutral-300 hover:text-success hover:bg-success/10"
+                    )}
+                    aria-label="Build with Claude"
+                  >
+                    <Play size={14} />
+                  </Button>
+                </Tooltip>
+              )}
+              <Tooltip content="Edit">
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => onBuild(task.id)}
-                  disabled={buildDisabled}
-                  className={cn(
-                    "h-8 w-8",
-                    buildDisabled
-                      ? "text-neutral-200 cursor-not-allowed"
-                      : "text-neutral-300 hover:text-success hover:bg-success/10"
-                  )}
-                  aria-label="Build with Claude"
-                  title={buildDisabled ? "Build in progress..." : "Build with Claude"}
+                  onClick={handleStartEdit}
+                  className="h-8 w-8 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100"
+                  aria-label="Edit task"
                 >
-                  <Play size={14} />
+                  <Pencil size={14} />
                 </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleStartEdit}
-                className="h-8 w-8 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100"
-                aria-label="Edit task"
-              >
-                <Pencil size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onDelete(task.id)}
-                className="h-8 w-8 text-neutral-300 hover:text-danger hover:bg-danger/10"
-                aria-label="Delete task"
-              >
-                <Trash2 size={14} />
-              </Button>
+              </Tooltip>
+              <Tooltip content="Delete">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(task.id)}
+                  className="h-8 w-8 text-neutral-300 hover:text-danger hover:bg-danger/10"
+                  aria-label="Delete task"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </Tooltip>
             </div>
 
             {/* Status dropdown - under action buttons */}

@@ -9,6 +9,7 @@ import {
 import { ChevronDown, ChevronRight, GripVertical, Play, Pencil, Trash2, Check, X, FileText } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui';
+import { Tooltip } from './Tooltip';
 import { cn } from '../lib/utils';
 import type { Feature, Task, TaskStatus } from '../types';
 
@@ -173,8 +174,16 @@ export function FeatureSection({
           </div>
         ) : (
           <>
-            <span className="flex-1 text-sm font-semibold text-neutral-800">
+            <span className="flex-1 text-sm font-semibold text-neutral-800 flex items-center gap-2">
+              {!isUngrouped && (
+                <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Feature</span>
+              )}
               {feature.title}
+              {!isUngrouped && (
+                <span className="text-[10px] font-mono text-neutral-400">
+                  #{feature.id.slice(0, 4).toUpperCase()}
+                </span>
+              )}
             </span>
 
             {/* Task counts */}
@@ -194,52 +203,56 @@ export function FeatureSection({
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                 {/* Requirement doc link */}
                 {feature.requirement_path && onOpenRequirement && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onOpenRequirement(feature.requirement_path!)}
-                    className="h-7 w-7 text-neutral-400 hover:text-primary hover:bg-primary/10"
-                    title={`Open requirements: ${feature.requirement_path}`}
-                  >
-                    <FileText size={14} />
-                  </Button>
+                  <Tooltip content="Open requirements">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onOpenRequirement(feature.requirement_path!)}
+                      className="h-7 w-7 text-neutral-400 hover:text-primary hover:bg-primary/10"
+                    >
+                      <FileText size={14} />
+                    </Button>
+                  </Tooltip>
                 )}
                 {onBuildFeature && tasks.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onBuildFeature(feature.id)}
-                    disabled={buildDisabled}
-                    className={cn(
-                      'h-7 w-7',
-                      buildDisabled
-                        ? 'text-neutral-200 cursor-not-allowed'
-                        : 'text-neutral-400 hover:text-success hover:bg-success/10'
-                    )}
-                    title="Build all tasks in feature"
-                  >
-                    <Play size={14} />
-                  </Button>
+                  <Tooltip content={buildDisabled ? "Build in progress..." : "Build all tasks"}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onBuildFeature(feature.id)}
+                      disabled={buildDisabled}
+                      className={cn(
+                        'h-7 w-7',
+                        buildDisabled
+                          ? 'text-neutral-200 cursor-not-allowed'
+                          : 'text-neutral-400 hover:text-success hover:bg-success/10'
+                      )}
+                    >
+                      <Play size={14} />
+                    </Button>
+                  </Tooltip>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsEditing(true)}
-                  className="h-7 w-7 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
-                  title="Edit feature"
-                >
-                  <Pencil size={14} />
-                </Button>
-                {onFeatureDelete && (
+                <Tooltip content="Edit">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onFeatureDelete(feature.id)}
-                    className="h-7 w-7 text-neutral-400 hover:text-danger hover:bg-danger/10"
-                    title="Delete feature"
+                    onClick={() => setIsEditing(true)}
+                    className="h-7 w-7 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
                   >
-                    <Trash2 size={14} />
+                    <Pencil size={14} />
                   </Button>
+                </Tooltip>
+                {onFeatureDelete && (
+                  <Tooltip content="Delete">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onFeatureDelete(feature.id)}
+                      className="h-7 w-7 text-neutral-400 hover:text-danger hover:bg-danger/10"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </Tooltip>
                 )}
               </div>
             )}

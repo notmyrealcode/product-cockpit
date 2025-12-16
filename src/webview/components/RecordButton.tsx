@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Square, Loader2 } from 'lucide-react';
 import { vscode } from '../lib/vscode';
 import { cn } from '../lib/utils';
+
+const MAX_RECORDING_SECONDS = 300; // 5 minutes
 
 interface RecordButtonProps {
   onTranscript: (text: string) => void;
@@ -13,6 +15,42 @@ interface RecordButtonProps {
 export function RecordButton({ onTranscript, className, size = 'sm', rawMode = false }: RecordButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Format seconds as M:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Start/stop timer based on recording state
+  useEffect(() => {
+    if (isRecording) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(prev => {
+          const next = prev + 1;
+          // Auto-stop at max time
+          if (next >= MAX_RECORDING_SECONDS) {
+            vscode.postMessage({ type: 'stopRecording' });
+          }
+          return next;
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isRecording]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -74,7 +112,31 @@ export function RecordButton({ onTranscript, className, size = 'sm', rawMode = f
   };
 
   const iconSize = size === 'sm' ? 14 : 16;
-  const buttonSize = size === 'sm' ? 'h-9 w-9' : 'h-10 w-10';
+  const buttonSize = size === 'sm' ? 'h-9' : 'h-10';
+
+  // When recording, show timer alongside stop button
+  if (isRecording) {
+    return (
+      <div className={cn('flex items-center gap-2', className)}>
+        <span className="text-xs font-mono text-danger tabular-nums">
+          {formatTime(elapsedSeconds)} / {formatTime(MAX_RECORDING_SECONDS)}
+        </span>
+        <button
+          type="button"
+          onClick={handleClick}
+          className={cn(
+            'flex items-center justify-center rounded transition-colors',
+            buttonSize,
+            size === 'sm' ? 'w-9' : 'w-10',
+            'bg-danger text-neutral-0 hover:bg-danger/90'
+          )}
+          title="Stop recording"
+        >
+          <Square size={iconSize} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button
@@ -84,18 +146,15 @@ export function RecordButton({ onTranscript, className, size = 'sm', rawMode = f
       className={cn(
         'flex items-center justify-center rounded transition-colors',
         buttonSize,
-        isRecording
-          ? 'bg-danger text-neutral-0 hover:bg-danger/90'
-          : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700',
+        size === 'sm' ? 'w-9' : 'w-10',
+        'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700',
         isProcessing && 'opacity-50 cursor-not-allowed',
         className
       )}
-      title={isRecording ? 'Stop recording' : 'Record voice'}
+      title={isProcessing ? 'Processing...' : 'Record voice'}
     >
       {isProcessing ? (
         <Loader2 size={iconSize} className="animate-spin" />
-      ) : isRecording ? (
-        <Square size={iconSize} />
       ) : (
         <Mic size={iconSize} />
       )}

@@ -30,6 +30,7 @@ async function buildWebview() {
     external: ['*.css'],
     loader: {
       '.css': 'empty',
+      '.png': 'dataurl',
     },
   });
 

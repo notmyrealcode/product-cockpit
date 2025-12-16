@@ -200,46 +200,10 @@ ${featuresSection}
     }
 
     /**
-     * Get design.md template
+     * Get design.md template - starts empty so first edit shows real changes
      */
     private getDesignTemplate(): string {
-        return `# Design Guide
-> Global design patterns and conventions for this project.
-
-## Colors
-<!-- Define your color palette -->
-- Primary:
-- Secondary:
-- Background:
-- Text:
-
-## Typography
-<!-- Define fonts and sizes -->
-- Headings:
-- Body:
-- Code:
-
-## Components
-<!-- Document reusable component patterns -->
-
-### Buttons
-<!-- Button styles and usage -->
-
-### Forms
-<!-- Form input styles -->
-
-### Cards
-<!-- Card layouts -->
-
-## Layout Patterns
-<!-- Common layout structures -->
-
-## Conventions
-<!-- Naming conventions, file structure, etc. -->
-
----
-_Update this file as design decisions are made. This is referenced by AI assistants when implementing features._
-`;
+        return '';
     }
 
     /**

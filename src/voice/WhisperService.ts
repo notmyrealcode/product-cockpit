@@ -547,7 +547,18 @@ export class WhisperService {
             throw new Error(result.stderr || 'Transcription failed');
         }
 
-        return result.stdout.trim();
+        // Clean up whisper.cpp output artifacts
+        let transcript = result.stdout.trim();
+
+        // Remove [blank audio], [BLANK_AUDIO], and similar markers that whisper outputs for silence
+        transcript = transcript.replace(/\[blank[_ ]?audio\]/gi, '');
+        transcript = transcript.replace(/\[silence\]/gi, '');
+        transcript = transcript.replace(/\[inaudible\]/gi, '');
+
+        // Clean up extra whitespace from removed markers
+        transcript = transcript.replace(/\s+/g, ' ').trim();
+
+        return transcript;
     }
 
     private async convertToWav(inputPath: string, outputPath: string): Promise<void> {
