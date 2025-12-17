@@ -126,10 +126,13 @@ export default function App() {
   }, [features]);
 
   useEffect(() => {
+    console.log('[App] useEffect mounting, posting ready');
     const handleMessage = (event: MessageEvent<ExtensionMessage>) => {
       const message = event.data;
+      console.log('[App] Received message:', message.type);
       switch (message.type) {
         case 'initialized':
+          console.log('[App] Initialized with', message.tasks?.length, 'tasks,', message.features?.length, 'features');
           setTasks(message.tasks);
           setFeatures(message.features);
           setRequirements(message.requirements);
@@ -234,9 +237,13 @@ export default function App() {
     };
 
     window.addEventListener('message', handleMessage);
+    console.log('[App] Posting ready message now');
     vscode.postMessage({ type: 'ready' });
 
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      console.log('[App] useEffect cleanup');
+      window.removeEventListener('message', handleMessage);
+    };
   }, []);
 
   const handleAddTask = (title: string, description: string) => {

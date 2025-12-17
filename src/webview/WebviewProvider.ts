@@ -13,6 +13,15 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+// Output channel for debugging
+const outputChannel = vscode.window.createOutputChannel('Shepherd');
+
+function log(message: string): void {
+    const timestamp = new Date().toISOString();
+    outputChannel.appendLine(`[${timestamp}] ${message}`);
+    console.log(`[Shepherd] ${message}`);
+}
+
 interface Requirement {
     path: string;
     title: string;
@@ -48,6 +57,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         private readonly taskStore: TaskStore,
         private readonly workspaceRoot: string
     ) {
+        log('WebviewProvider constructor called');
+        outputChannel.show(true); // Show the output channel (true = preserve focus)
+
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
         this.requirementsIndexPath = path.join(this.requirementsDir, '.index.json');
         this.whisperService = new WhisperService(workspaceRoot);
@@ -89,14 +101,30 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             ]
         };
 
+        log('resolveWebviewView called, visible: ' + webviewView.visible);
         webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+        log('HTML set for webview');
+
+        // Track if webview is ready (has sent 'ready' message)
+        let webviewReady = false;
+
+        // Resend initialization when view becomes visible
+        webviewView.onDidChangeVisibility(() => {
+            log('onDidChangeVisibility, visible: ' + webviewView.visible + ', webviewReady: ' + webviewReady);
+            if (webviewView.visible && webviewReady) {
+                log('Resending initialization on visibility change');
+                this.sendInitialized();
+            }
+        });
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
-            console.log('[WebviewProvider] Received message:', message.type);
+            log('Received message: ' + message.type);
             try {
                 switch (message.type) {
                     case 'ready':
+                        log('Received ready, view visible: ' + webviewView.visible);
+                        webviewReady = true;
                         this.sendInitialized();
                         break;
                     // Feature handlers
@@ -225,12 +253,14 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async sendInitialized(): Promise<void> {
+        log('sendInitialized called, _view exists: ' + !!this._view);
         if (this._view) {
             const project = this.taskStore.getProject();
             const features = this.taskStore.getFeatures();
             const tasks = this.taskStore.getTasks();
             const requirements = await this.getRequirements();
             const parserModel = vscode.workspace.getConfiguration('pmcockpit').get<string>('parserModel', 'haiku');
+            log('Sending initialized with ' + tasks.length + ' tasks, ' + features.length + ' features');
             this._view.webview.postMessage({
                 type: 'initialized',
                 project,
@@ -473,9 +503,27 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const removedTasks = new Set(removedTaskIndices || []);
 
             // 1. Save requirement document (only for project/feature scope)
-            if (!isTaskScope && this.currentProposal.requirementPath) {
-                const docContent = editedRequirementDoc || this.currentProposal.requirementDoc;
-                const reqPath = path.resolve(this.workspaceRoot, this.currentProposal.requirementPath);
+            const docContent = editedRequirementDoc || this.currentProposal.requirementDoc;
+            if (!isTaskScope && docContent && docContent.trim()) {
+                // Generate a default path if not provided or if it conflicts with design.md
+                let requirementPath = this.currentProposal.requirementPath;
+                if (!requirementPath || requirementPath.endsWith('design.md')) {
+                    // Extract title from first heading or use timestamp
+                    const titleMatch = docContent.match(/^#\s+(.+)$/m);
+                    const baseSlug = titleMatch
+                        ? titleMatch[1].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+                        : `requirement`;
+
+                    // Find unique filename (append -2, -3, etc. if exists)
+                    let slug = baseSlug;
+                    let counter = 1;
+                    while (fs.existsSync(path.join(this.workspaceRoot, `docs/requirements/${slug}.md`))) {
+                        counter++;
+                        slug = `${baseSlug}-${counter}`;
+                    }
+                    requirementPath = `docs/requirements/${slug}.md`;
+                }
+                const reqPath = path.resolve(this.workspaceRoot, requirementPath);
 
                 // Security: Validate path is within workspace (prevent path traversal)
                 if (!reqPath.startsWith(this.workspaceRoot + path.sep)) {
@@ -485,10 +533,10 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 const reqDir = path.dirname(reqPath);
                 await fs.promises.mkdir(reqDir, { recursive: true });
                 await fs.promises.writeFile(reqPath, docContent, 'utf-8');
-                savedReqPath = this.currentProposal.requirementPath;
+                savedReqPath = requirementPath;
 
                 // Update requirements index with summary (async, don't block)
-                this.updateRequirementInIndex(savedReqPath, docContent).catch(err => {
+                this.updateRequirementInIndex(requirementPath, docContent).catch(err => {
                     console.error('[WebviewProvider] Failed to update requirements index:', err);
                 });
             }
@@ -523,7 +571,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     const feature = this.taskStore.createFeature({
                         title: feat.title,
                         description: feat.description,
-                        requirement_path: this.currentProposal.requirementPath
+                        requirement_path: savedReqPath
                     });
                     featureIdMap.set(i, feature.id);
                 }
@@ -1073,9 +1121,22 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:; media-src blob:; connect-src https://hacker-news.firebaseio.com;">
     <link href="${styleUri}" rel="stylesheet">
     <title>Shepherd</title>
+    <style>
+        #loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: system-ui, sans-serif;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div id="loading-indicator">Loading Shepherd...</div>
+    </div>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

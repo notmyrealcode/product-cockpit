@@ -66,12 +66,22 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             TaskWebviewProvider.viewType,
-            webviewProvider
+            webviewProvider,
+            {
+                // Force webview to be created immediately when view becomes visible
+                webviewOptions: { retainContextWhenHidden: true }
+            }
         ),
         webviewProvider,
         taskStore,
         { dispose: () => httpBridge?.stop() }
     );
+
+    // Force the webview to be created by focusing the view
+    // Small delay to ensure VS Code UI is ready
+    setTimeout(() => {
+        vscode.commands.executeCommand('pmcockpit.taskView.focus');
+    }, 100);
 
     // Register command to open sidebar (view is already in auxiliary bar via package.json)
     context.subscriptions.push(

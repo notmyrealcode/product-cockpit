@@ -550,10 +550,11 @@ export class WhisperService {
         // Clean up whisper.cpp output artifacts
         let transcript = result.stdout.trim();
 
-        // Remove [blank audio], [BLANK_AUDIO], and similar markers that whisper outputs for silence
+        // Remove [blank audio], [BLANK_AUDIO], [Pause], and similar markers that whisper outputs for silence
         transcript = transcript.replace(/\[blank[_ ]?audio\]/gi, '');
         transcript = transcript.replace(/\[silence\]/gi, '');
         transcript = transcript.replace(/\[inaudible\]/gi, '');
+        transcript = transcript.replace(/\[pause\]/gi, '');
 
         // Clean up extra whitespace from removed markers
         transcript = transcript.replace(/\s+/g, ' ').trim();
