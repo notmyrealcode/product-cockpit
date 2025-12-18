@@ -25,6 +25,7 @@ import { RequirementsList } from './components/RequirementsList';
 import { RequirementsInterview } from './components/RequirementsInterview';
 import { AddMenu } from './components/AddMenu';
 import { RecordButton } from './components/RecordButton';
+import { Toast, ToastType } from './components/Toast';
 import { Button } from './components/ui';
 import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
 
@@ -65,6 +66,9 @@ export default function App() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [addTaskType, setAddTaskType] = useState<'task' | 'bug'>('task');
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   // Interview state
   const [interviewActive, setInterviewActive] = useState(false);
@@ -231,6 +235,9 @@ export default function App() {
         case 'interviewError':
           setInterviewError(message.error);
           setInterviewThinking(false);
+          break;
+        case 'showToast':
+          setToast({ message: message.message, type: message.toastType || 'info' });
           break;
         // voiceTranscribed and voiceError are handled by RecordButton component
       }
@@ -934,6 +941,15 @@ export default function App() {
           onApprove={handleInterviewApprove}
           onReject={handleInterviewReject}
           onCancel={handleInterviewCancel}
+        />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
     </div>

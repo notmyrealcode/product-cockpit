@@ -1,7 +1,36 @@
+# Source files (compiled to out/)
+src/**
+**/*.ts
+!out/**/*.js
+
+# Development config
 .vscode/**
 .vscode-test/**
-src/**
 .gitignore
 tsconfig.json
+vitest.config.ts
+vitest.config.js
+vitest.config.js.map
+esbuild.js
+postcss.config.js
+tailwind.config.js
+
+# Build artifacts
 **/*.map
 node_modules/**
+
+# Test files
+**/*.test.ts
+**/*.test.js
+
+# Dev files
+hello.html
+.claude/**
+
+# Documentation (keep README and LICENSE)
+docs/plans/**
+docs/future-*.md
+
+# Package files
+package-lock.json
+*.vsix

@@ -80,7 +80,8 @@ export type ExtensionMessage =
   | { type: 'interviewProposal'; proposal: InterviewProposal; currentDesignMd?: string }
   | { type: 'interviewComplete'; requirementPath: string }
   | { type: 'interviewError'; error: string }
-  | { type: 'interviewCancelled' };
+  | { type: 'interviewCancelled' }
+  | { type: 'showToast'; message: string; toastType?: 'success' | 'error' | 'info' };
 
 // Messages from webview to extension
 export type WebviewMessage =

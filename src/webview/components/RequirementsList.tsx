@@ -91,18 +91,30 @@ export function RequirementsList({
                     </div>
                   </div>
                 </button>
-                <button
-                  onClick={(e) => handleDelete(req.path, e)}
-                  onBlur={() => setConfirmDelete(null)}
-                  className={`p-2 mr-2 rounded transition-colors ${
-                    isConfirming
-                      ? 'bg-danger text-white'
-                      : 'text-neutral-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100'
-                  }`}
-                  title={isConfirming ? 'Click again to confirm' : 'Delete requirement'}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="flex items-center mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenRequirement(req.path);
+                    }}
+                    className="p-2 rounded text-neutral-400 hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="Edit requirement"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(req.path, e)}
+                    onBlur={() => setConfirmDelete(null)}
+                    className={`p-2 rounded transition-colors ${
+                      isConfirming
+                        ? 'bg-danger text-white'
+                        : 'text-neutral-400 hover:text-danger hover:bg-danger/10'
+                    }`}
+                    title={isConfirming ? 'Click again to confirm' : 'Delete requirement'}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           })

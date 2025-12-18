@@ -618,13 +618,16 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             // Always refresh requirements list after approval
             this.sendRequirements();
 
-            // Show appropriate message
-            if (isTaskScope) {
-                vscode.window.showInformationMessage(`Created ${taskCount} task(s)`);
-            } else {
-                vscode.window.showInformationMessage(
-                    `Created ${featureCount} feature(s) and ${taskCount} task(s)`
-                );
+            // Show appropriate toast message in webview
+            if (this._view) {
+                const message = isTaskScope
+                    ? `Created ${taskCount} task(s)`
+                    : `Created ${featureCount} feature(s) and ${taskCount} task(s)`;
+                this._view.webview.postMessage({
+                    type: 'showToast',
+                    message,
+                    toastType: 'success'
+                });
             }
         } catch (error) {
             if (this._view) {
