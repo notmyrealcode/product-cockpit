@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { TaskStore } from './tasks/TaskStore';
 import { TaskWebviewProvider } from './webview/WebviewProvider';
 import { HttpBridge } from './http/bridge';
 import { initialize, isInitialized, updateMcpServer } from './init/initialize';
 import { initDatabase, closeDatabase } from './db';
+
+const execAsync = promisify(exec);
 
 let taskStore: TaskStore | undefined;
 let webviewProvider: TaskWebviewProvider | undefined;
@@ -43,6 +47,19 @@ export async function activate(context: vscode.ExtensionContext) {
 async function activateExtension(context: vscode.ExtensionContext, workspaceRoot: string): Promise<void> {
     // Set context for UI visibility
     vscode.commands.executeCommand('setContext', 'pmcockpit.initialized', true);
+
+    // Check for Claude Code CLI
+    const hasClaudeCode = await checkClaudeCodeInstalled();
+    if (!hasClaudeCode) {
+        const action = await vscode.window.showWarningMessage(
+            'Claude Code CLI not found. Some Shepherd features require it.',
+            'Install Claude Code',
+            'Dismiss'
+        );
+        if (action === 'Install Claude Code') {
+            vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/code'));
+        }
+    }
 
     // Update MCP server to latest version (safe - it's stateless)
     await updateMcpServer(workspaceRoot);
@@ -111,4 +128,13 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
 export function deactivate() {
     httpBridge?.stop();
     closeDatabase();
+}
+
+async function checkClaudeCodeInstalled(): Promise<boolean> {
+    try {
+        await execAsync('claude --version');
+        return true;
+    } catch {
+        return false;
+    }
 }
