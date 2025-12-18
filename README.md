@@ -18,17 +18,7 @@ A VS Code extension that helps product managers work with AI coding agents like 
 - **whisper.cpp** — Automatically installed on first voice capture
 - **Whisper models** — Downloaded automatically (~150MB for base model)
 
-## Installation
-
-### From VSIX (Testing)
-
-1. Download the `.vsix` file
-2. In VS Code, open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
-3. Run "Extensions: Install from VSIX..."
-4. Select the downloaded file
-5. Reload VS Code
-
-### First Run
+## Getting Started
 
 1. Open a project folder in VS Code
 2. Click the Shepherd icon in the activity bar (left sidebar)
