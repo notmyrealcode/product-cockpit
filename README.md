@@ -14,13 +14,12 @@ A VS Code extension that helps product managers work with AI coding agents like 
 Before installing Shepherd, ensure you have:
 
 1. **Claude Code CLI** — Install from [claude.ai/code](https://claude.ai/code)
-2. **sox** (for voice capture)
+2. **sox** (for voice capture) — must be installed manually:
    - macOS: `brew install sox`
    - Linux: `sudo apt install sox`
    - Windows: Download from [sox.sourceforge.net](http://sox.sourceforge.net/)
-3. **whisper.cpp** (for local transcription, optional)
-   - macOS: `brew install whisper-cpp`
-   - Other: Shepherd will guide you through installation on first use
+
+**Note:** whisper.cpp and models are installed automatically by Shepherd on first voice capture.
 
 ## Installation
 
