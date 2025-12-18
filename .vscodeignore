@@ -28,8 +28,7 @@ hello.html
 .claude/**
 
 # Documentation (keep README and LICENSE)
-docs/plans/**
-docs/future-*.md
+docs/**
 
 # Package files
 package-lock.json
