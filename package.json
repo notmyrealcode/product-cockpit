@@ -3,6 +3,7 @@
   "displayName": "Shepherd",
   "description": "Product copilot for AI coding agents",
   "version": "0.0.1",
+  "private": true,
   "publisher": "shepherd",
   "icon": "resources/icon.png",
   "engines": {
