@@ -94,4 +94,4 @@ Before installing Shepherd, ensure you have:
 
 ## License
 
-MIT
+Proprietary. See LICENSE file.
