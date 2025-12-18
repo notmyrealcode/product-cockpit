@@ -3,6 +3,8 @@
   "displayName": "Shepherd",
   "description": "Product copilot for AI coding agents",
   "version": "0.0.1",
+  "publisher": "shepherd",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
