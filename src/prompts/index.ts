@@ -138,20 +138,33 @@ CRITICAL - EXISTING FEATURES FIRST:
 - You CAN MIX: create new features AND add tasks to existing features in the same proposal
 - Only create a new feature if the functionality doesn't fit any existing feature
 
+⚠️ FEATURE CONSOLIDATION RULE:
+An LLM will build each feature and needs ALL related work in one context.
+Group related functionality into FEWER, LARGER features rather than many small ones.
+
+WRONG - Too many granular features:
+  features: ["Login Form", "Logout Button", "Password Reset", "Session Management"]
+
+RIGHT - Consolidated features:
+  features: ["User Authentication"]
+  tasks: ["Create login form", "Add logout functionality", "Implement password reset", "Add session management"]
+
+WRONG - Splitting one page into multiple features:
+  features: ["Dashboard Layout", "Dashboard Charts", "Dashboard Filters"]
+
+RIGHT - One feature per logical unit:
+  features: ["Dashboard"]
+  tasks: ["Create dashboard layout", "Add chart components", "Implement filters"]
+
+BEFORE PROPOSING: Review your features. Ask: "Could these be built together?" If yes, consolidate.
+
 PROPOSAL CAN INCLUDE:
 - New features with tasks (using featureIndex pointing to new features array)
 - Tasks for existing features (using existingFeatureId pointing to existing feature IDs)
 - Or a combination of both
 
-CRITICAL - CONSOLIDATE NEW FEATURES:
-- When creating NEW features, create FEWER, LARGER features rather than many small ones
-- A feature should contain everything an LLM would need to build together
-- Closely related functionality belongs in ONE feature so the LLM has full context
-- Example: "User Authentication" (login, logout, password reset, session management) = ONE feature, not four
-
 CRITICAL - ACKNOWLEDGE USER INPUT:
-- If the user already specified details (colors, features, behavior), DO NOT ask about those things again
-- Only ask about things the user has NOT already told you
+- If the user already specified details, DO NOT ask about those things again
 - If the user gave enough detail, skip questions and go straight to proposal
 
 CONTEXT:
@@ -162,7 +175,6 @@ CONTEXT:
 APPROACH:
 - First, check if request relates to existing features
 - Only ask about genuinely missing information needed to implement
-- Prefer multiple-choice questions when possible
 - Don't over-question - 2-4 questions is usually enough
 
 PROPOSAL REQUIREMENTS:
@@ -186,31 +198,40 @@ STEP 1 - CHECK EXISTING FEATURES FIRST:
   → Use empty strings for requirementDoc and requirementPath
   → This is the PREFERRED outcome when there's a matching feature
 
-STEP 2 - ONLY IF GENUINELY NEW FUNCTIONALITY:
+STEP 2 - IF CREATING A NEW FEATURE, CREATE EXACTLY ONE:
 - If the request is for functionality NOT covered by any existing feature:
-  → Create exactly ONE new feature (never multiple)
+  → Create exactly ONE new feature (NEVER multiple)
   → All tasks belong to this single feature (featureIndex: 0)
   → Include requirementDoc and requirementPath
 
+⚠️ ONE FEATURE CONSOLIDATION RULE:
+An LLM will build this feature and needs ALL related work in one context.
+Group everything related to the user's request into ONE feature with multiple tasks.
+
+WRONG - Splitting into multiple features:
+  features: ["User Profile Page", "Profile Settings", "Profile Avatar Upload"]
+
+RIGHT - One consolidated feature with tasks:
+  features: ["User Profile Page"]
+  tasks: ["Create profile page layout", "Add settings section", "Implement avatar upload", "Add to navigation"]
+
+BEFORE PROPOSING: Check your features array. If length > 1, STOP and consolidate.
+
 MATCHING EXAMPLES:
-- Existing: "Hello World Display" + Request: "make it blue" → MATCH → use existingFeatureId
 - Existing: "User Dashboard" + Request: "add charts" → MATCH → use existingFeatureId
-- Existing: "Login Page" + Request: "add payment system" → NO MATCH → create new feature
+- Existing: "Login Page" + Request: "add payment system" → NO MATCH → create ONE new feature
 
 CRITICAL - ACKNOWLEDGE USER INPUT:
-- If the user already specified details (colors, behavior, implementation), DO NOT ask about those things again
-- Only ask about things the user has NOT already told you
+- If the user already specified details, DO NOT ask about those things again
 - If the user gave enough detail, skip questions and go straight to proposal
 
 CONTEXT:
 - The user message includes context about the existing app - READ IT CAREFULLY
 - Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY
-- Feature logic/behavior goes in the feature's requirementDoc (only for NEW features)
 
 APPROACH:
 - First, check if request matches an existing feature
 - Only ask about genuinely missing information needed to implement
-- Prefer multiple-choice questions when possible
 - Don't over-question - 1-3 questions is usually enough
 
 ${JSON_FORMAT_RULES}`;
