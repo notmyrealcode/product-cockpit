@@ -45,12 +45,23 @@
       ],
       "shepherd-shortcut": [
         {
+          "id": "shepherd.welcomeView",
+          "name": "Shepherd",
+          "when": "!shepherd.initialized"
+        },
+        {
           "id": "shepherd.shortcutView",
           "name": "Shepherd",
           "when": "shepherd.initialized"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "shepherd.welcomeView",
+        "contents": "Get started with Shepherd to manage tasks for AI coding agents.\n\n[Get Started](command:shepherd.openWalkthrough)"
+      }
+    ],
     "commands": [
       {
         "command": "shepherd.initialize",
