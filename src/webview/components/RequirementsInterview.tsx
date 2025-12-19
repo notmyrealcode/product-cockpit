@@ -369,37 +369,36 @@ export function RequirementsInterview({
 
               {/* Design.md changes - only show if there are design changes */}
               {proposal.proposedDesignMd && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 text-purple-700">
-                      <Palette size={16} />
-                      <span className="text-sm font-medium">Design Guide Updates</span>
-                      <span className="text-xs text-neutral-400">(will replace design.md)</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setShowDiffView(true)}
-                        className={cn(
-                          'px-2 py-1 text-xs rounded transition-colors',
-                          showDiffView
-                            ? 'bg-purple-200 text-purple-800'
-                            : 'text-purple-600 hover:bg-purple-100'
-                        )}
-                      >
-                        Diff
-                      </button>
-                      <button
-                        onClick={() => setShowDiffView(false)}
-                        className={cn(
-                          'px-2 py-1 text-xs rounded transition-colors',
-                          !showDiffView
-                            ? 'bg-purple-200 text-purple-800'
-                            : 'text-purple-600 hover:bg-purple-100'
-                        )}
-                      >
-                        Edit
-                      </button>
-                    </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  {/* Header row */}
+                  <div className="flex items-center gap-2 text-purple-700 mb-1">
+                    <Palette size={14} className="shrink-0" />
+                    <span className="text-sm font-medium truncate">Design Guide</span>
+                  </div>
+                  {/* Toggle buttons */}
+                  <div className="flex gap-1 mb-3">
+                    <button
+                      onClick={() => setShowDiffView(true)}
+                      className={cn(
+                        'px-2 py-1 text-xs rounded transition-colors',
+                        showDiffView
+                          ? 'bg-purple-200 text-purple-800'
+                          : 'text-purple-600 hover:bg-purple-100'
+                      )}
+                    >
+                      Diff
+                    </button>
+                    <button
+                      onClick={() => setShowDiffView(false)}
+                      className={cn(
+                        'px-2 py-1 text-xs rounded transition-colors',
+                        !showDiffView
+                          ? 'bg-purple-200 text-purple-800'
+                          : 'text-purple-600 hover:bg-purple-100'
+                      )}
+                    >
+                      Edit
+                    </button>
                   </div>
 
                   {showDiffView ? (
@@ -430,14 +429,14 @@ export function RequirementsInterview({
 
               {/* Features with tasks */}
               {proposal.features.length > 0 && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-primary mb-3">
-                    <ListTodo size={16} />
-                    <span className="text-sm font-medium">
-                      {proposal.features.filter((_, i) => !removedFeatures.has(i)).length} Feature{proposal.features.filter((_, i) => !removedFeatures.has(i)).length !== 1 ? 's' : ''} + {proposal.tasks.filter((_, i) => !removedTasks.has(i)).length} Task{proposal.tasks.filter((_, i) => !removedTasks.has(i)).length !== 1 ? 's' : ''}
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-primary mb-2">
+                    <ListTodo size={14} />
+                    <span className="text-xs font-medium">
+                      {proposal.features.filter((_, i) => !removedFeatures.has(i)).length} Features, {proposal.tasks.filter((_, i) => !removedTasks.has(i)).length} Tasks
                     </span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {proposal.features.map((feature, idx) => {
                       if (removedFeatures.has(idx)) return null;
                       const isExpanded = expandedFeatures.has(idx);
@@ -446,89 +445,35 @@ export function RequirementsInterview({
                         .filter(t => t.featureIndex === idx && !removedTasks.has(t.originalIndex));
 
                       return (
-                        <div key={idx} className="bg-neutral-0 rounded border border-neutral-200 p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                                  Feature
-                                </span>
-                              </div>
-                              <p className="text-sm font-medium text-neutral-800">{feature.title}</p>
-                              {feature.description && (
-                                <div className="mt-1">
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(expandedFeatures);
-                                      if (isExpanded) next.delete(idx);
-                                      else next.add(idx);
-                                      setExpandedFeatures(next);
-                                    }}
-                                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600"
-                                  >
-                                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                    {isExpanded ? 'Hide details' : 'Show details'}
-                                  </button>
-                                  {isExpanded && (
-                                    <p className="text-xs text-neutral-500 mt-1 whitespace-pre-wrap">{feature.description}</p>
-                                  )}
-                                </div>
-                              )}
+                        <div key={idx} className="bg-neutral-0 rounded border border-neutral-200 p-2">
+                          <div className="flex items-start justify-between gap-1">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-neutral-800 break-words">{feature.title}</p>
                             </div>
                             <button
                               onClick={() => setRemovedFeatures(prev => new Set([...prev, idx]))}
-                              className="p-1 text-neutral-300 hover:text-danger hover:bg-danger/10 rounded"
-                              title="Remove feature"
+                              className="p-1 text-neutral-300 hover:text-danger shrink-0"
+                              title="Remove"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
 
-                          {/* Tasks for this feature */}
+                          {/* Tasks for this feature - compact list */}
                           {featureTasks.length > 0 && (
-                            <div className="mt-3 pt-2 border-t border-neutral-100">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-2">Tasks</p>
-                              <div className="space-y-1.5">
-                                {featureTasks.map((task) => {
-                                  const taskExpanded = expandedTasks.has(task.originalIndex);
-                                  return (
-                                    <div key={task.originalIndex} className="flex items-start gap-2 text-xs text-neutral-600 bg-neutral-50 rounded px-2 py-1.5">
-                                      <span className="text-[9px] font-medium uppercase bg-neutral-200 text-neutral-500 px-1 py-0.5 rounded mt-0.5 shrink-0">
-                                        Task
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <span>{task.title}</span>
-                                        {task.description && (
-                                          <div>
-                                            <button
-                                              onClick={() => {
-                                                const next = new Set(expandedTasks);
-                                                if (taskExpanded) next.delete(task.originalIndex);
-                                                else next.add(task.originalIndex);
-                                                setExpandedTasks(next);
-                                              }}
-                                              className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600 mt-0.5"
-                                            >
-                                              {taskExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                                              {taskExpanded ? 'Hide' : 'Details'}
-                                            </button>
-                                            {taskExpanded && (
-                                              <p className="text-neutral-500 mt-1 whitespace-pre-wrap">{task.description}</p>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <button
-                                        onClick={() => setRemovedTasks(prev => new Set([...prev, task.originalIndex]))}
-                                        className="p-0.5 text-neutral-300 hover:text-danger shrink-0"
-                                        title="Remove task"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                            <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
+                              {featureTasks.map((task) => (
+                                <div key={task.originalIndex} className="flex items-start gap-1 text-[11px] text-neutral-600">
+                                  <span className="text-neutral-400">•</span>
+                                  <span className="flex-1 min-w-0 break-words">{task.title}</span>
+                                  <button
+                                    onClick={() => setRemovedTasks(prev => new Set([...prev, task.originalIndex]))}
+                                    className="p-0.5 text-neutral-300 hover:text-danger shrink-0"
+                                  >
+                                    <Trash2 size={10} />
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
