@@ -192,6 +192,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                             feature_id: message.featureId,
                             type: message.taskType
                         });
+                        // Mark walkthrough step as complete
+                        vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.taskCreated', true);
                         break;
                     case 'updateTask':
                         this.taskStore.updateTask(message.id, message.updates);

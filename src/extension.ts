@@ -22,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Reset walkthrough contexts on startup (VS Code persists them between sessions)
     await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.initDone', false);
     await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.voiceDone', false);
+    await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.taskCreated', false);
 
     // Register initialize command (always available)
     context.subscriptions.push(

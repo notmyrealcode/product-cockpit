@@ -155,7 +155,10 @@
             "media": {
               "svg": "resources/walkthrough/task.svg",
               "altText": "Create task"
-            }
+            },
+            "completionEvents": [
+              "onContext:shepherd.walkthrough.taskCreated"
+            ]
           }
         ]
       }
