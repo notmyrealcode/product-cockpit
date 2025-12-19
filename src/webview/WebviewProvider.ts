@@ -60,7 +60,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly taskStore: TaskStore,
         private readonly workspaceRoot: string,
-        walkthroughId?: string
+        walkthroughId?: string,
+        private readonly debug: boolean = false
     ) {
         this.walkthroughId = walkthroughId || 'JustinEckhouse.shepherd#shepherd.welcome';
         log('WebviewProvider constructor called');
@@ -69,7 +70,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         this.requirementsIndexPath = path.join(this.requirementsDir, '.index.json');
         this.whisperService = new WhisperService(workspaceRoot);
         this.audioRecorder = new AudioRecorder(workspaceRoot);
-        this.interviewService = new InterviewService(workspaceRoot);
+        this.interviewService = new InterviewService(workspaceRoot, debug);
         this.projectContext = new ProjectContext(workspaceRoot);
 
         // Initialize project context (creates COPILOT.md, design.md, etc.)

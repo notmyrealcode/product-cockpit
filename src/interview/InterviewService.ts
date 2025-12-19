@@ -64,7 +64,13 @@ export class InterviewService {
     private buffer = '';
     private claudeSessionId: string | null = null;  // Claude CLI session ID for resume
 
-    constructor(private workspaceRoot: string) {}
+    constructor(private workspaceRoot: string, private debug: boolean = false) {}
+
+    private log(...args: unknown[]): void {
+        if (this.debug) {
+            console.log('[InterviewService]', ...args);
+        }
+    }
 
     async start(
         scope: InterviewScope,
@@ -261,6 +267,13 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         const intensityAddition = INTENSITY_PROMPTS[this.intensity];
         const systemPrompt = intensityAddition ? `${basePrompt}\n\n${intensityAddition}` : basePrompt;
 
+        // DEBUG: Log full system prompt
+        this.log('========== SYSTEM PROMPT ==========');
+        this.log('Scope:', this.scope);
+        this.log('Intensity:', this.intensity);
+        this.log('Full prompt:\n', systemPrompt);
+        this.log('===================================');
+
         // Escape for shell
         const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
         const escapedSchema = JSON.stringify(INTERVIEW_RESPONSE_SCHEMA).replace(/'/g, "'\\''");
@@ -269,11 +282,11 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         if (isResume && this.claudeSessionId) {
             // Resume existing session with JSON schema for structured output
             cmd = `claude -p --resume ${this.claudeSessionId} --output-format json --json-schema '${escapedSchema}' --strict-mcp-config --tools "" -`;
-            console.log('[InterviewService] Resuming Claude session:', this.claudeSessionId);
+            this.log('Resuming Claude session:', this.claudeSessionId);
         } else {
             // New session with system prompt and JSON schema
             cmd = `claude -p --session-id ${this.claudeSessionId} --output-format json --json-schema '${escapedSchema}' --strict-mcp-config --tools "" --system-prompt '${escapedPrompt}' -`;
-            console.log('[InterviewService] Starting new Claude session:', this.claudeSessionId);
+            this.log('Starting new Claude session:', this.claudeSessionId);
         }
 
         this.process = spawn('/bin/zsh', ['-l', '-c', cmd], {
@@ -293,7 +306,10 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             return;
         }
 
-        console.log('[InterviewService] Sending message:', content.slice(0, 100));
+        // DEBUG: Log full user message
+        this.log('========== USER MESSAGE ==========');
+        this.log(content);
+        this.log('==================================');
         this.messages.push({ role: 'user', content });
         this.callbacks?.onMessage({ role: 'user', content });
         this.persistConversation();
@@ -333,7 +349,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         // Send message to Claude
         const stdin = this.process!.stdin;
         if (stdin) {
-            console.log('[InterviewService] Resuming conversation, sending:', userMessage.slice(0, 80));
+            this.log('Resuming conversation, sending:', userMessage.slice(0, 80));
             stdin.write(userMessage);
             stdin.end();
         } else {
@@ -389,7 +405,10 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
 
     private handleStdout(data: Buffer): void {
         const chunk = data.toString();
-        console.log('[InterviewService] stdout chunk:', chunk.slice(0, 200));
+        // DEBUG: Log full stdout chunk
+        this.log('========== STDOUT CHUNK ==========');
+        this.log(chunk);
+        this.log('==================================');
         this.buffer += chunk;
 
         // Process complete JSON objects from the buffer
@@ -405,7 +424,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
     private processLine(line: string): void {
         try {
             const parsed = JSON.parse(line);
-            console.log('[InterviewService] Parsed:', parsed.type);
+            this.log('Parsed:', parsed.type);
 
             // Handle CLI result wrapper (when using --output-format json)
             if (parsed.type === 'result') {
@@ -416,7 +435,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                 }
                 // Extract structured_output from the result wrapper
                 if (parsed.structured_output) {
-                    console.log('[InterviewService] Got structured_output:', parsed.structured_output.type);
+                    this.log('Got structured_output:', parsed.structured_output.type);
                     this.handleParsedResponse(parsed.structured_output);
                 }
                 return;
@@ -425,7 +444,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             // Deduplicate: skip if we just processed this exact response
             const responseKey = JSON.stringify(parsed);
             if (responseKey === this.lastParsedResponse) {
-                console.log('[InterviewService] Skipping duplicate response');
+                this.log('Skipping duplicate response');
                 return;
             }
             this.lastParsedResponse = responseKey;
@@ -438,7 +457,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             }
         } catch {
             // Not valid JSON - log for debugging
-            console.log('[InterviewService] Non-JSON line:', line.slice(0, 100));
+            this.log('Non-JSON line:', line.slice(0, 100));
         }
     }
 
@@ -498,6 +517,19 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                     tasks: (response.tasks as InterviewProposal['tasks']) || [],
                     proposedDesignMd: (response.proposedDesignMd as string) || undefined,
                 };
+
+                // DEBUG: Log full proposal details
+                this.log('========== PROPOSAL RECEIVED ==========');
+                this.log('Scope:', this.scope);
+                this.log('Features count:', proposal.features.length);
+                this.log('Features:', JSON.stringify(proposal.features, null, 2));
+                this.log('Tasks count:', proposal.tasks.length);
+                this.log('Tasks:', JSON.stringify(proposal.tasks, null, 2));
+                if (this.scope === 'new-feature' && proposal.features.length > 1) {
+                    this.log('⚠️ WARNING: Multiple features for new-feature scope!');
+                }
+                this.log('============================================');
+
                 this.accumulatedRequirements = [];  // Clear accumulated
                 this.retryCount = 0;  // Valid response, reset retry counter
                 this.persistProposal(proposal);
@@ -512,7 +544,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                 };
                 if (req.title) {
                     this.accumulatedRequirements.push(req);
-                    console.log('[InterviewService] Accumulated requirement:', req.title);
+                    this.log('Accumulated requirement:', req.title);
                 }
                 break;
             }
@@ -536,11 +568,11 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             }
             default:
                 // Unknown type - might be a tool call, try to recover
-                console.log('[InterviewService] Unknown response type:', type, response);
+                this.log('Unknown response type:', type, response);
 
                 // Check if this looks like a tool call
                 if (response.tool_name || response.tool || response.function) {
-                    console.log('[InterviewService] Detected tool call, will retry with format reminder');
+                    this.log('Detected tool call, will retry with format reminder');
                     // Schedule a retry after this turn completes
                     this.pendingRetry = true;
                 }
@@ -551,7 +583,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         // Deduplicate: skip if last message has same role and content
         const lastMsg = this.messages[this.messages.length - 1];
         if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === content) {
-            console.log('[InterviewService] Skipping duplicate assistant message:', content.slice(0, 50));
+            this.log('Skipping duplicate assistant message:', content.slice(0, 50));
             return;
         }
 
@@ -574,11 +606,11 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
     }
 
     private handleClose(code: number | null): void {
-        console.log('[InterviewService] Process closed with code:', code);
+        this.log('Process closed with code:', code);
 
         // Flush any remaining buffer content
         if (this.buffer.trim()) {
-            console.log('[InterviewService] Flushing remaining buffer:', this.buffer.slice(0, 100));
+            this.log('Flushing remaining buffer:', this.buffer.slice(0, 100));
             this.processLine(this.buffer);
             this.buffer = '';
         }
@@ -587,7 +619,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         if (this.pendingRetry && this.retryCount < 2) {
             this.pendingRetry = false;
             this.retryCount++;
-            console.log('[InterviewService] Retrying with format reminder, attempt:', this.retryCount);
+            this.log('Retrying with format reminder, attempt:', this.retryCount);
 
             // Continue conversation with a format reminder
             setTimeout(() => {

@@ -191,7 +191,9 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     await httpBridge.start();
 
     // Initialize Webview Provider
-    webviewProvider = new TaskWebviewProvider(context.extensionUri, taskStore, workspaceRoot, walkthroughId);
+    // Enable debug logging when running in development mode (F5)
+    const isDebug = context.extensionMode === vscode.ExtensionMode.Development;
+    webviewProvider = new TaskWebviewProvider(context.extensionUri, taskStore, workspaceRoot, walkthroughId, isDebug);
 
     // Register webview provider and cleanup
     context.subscriptions.push(
