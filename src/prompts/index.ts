@@ -50,7 +50,8 @@ export const INTERVIEW_RESPONSE_SCHEMA = {
                 type: 'object',
                 properties: {
                     title: { type: 'string' },
-                    description: { type: 'string' }
+                    description: { type: 'string' },
+                    featureIndex: { type: 'number' }  // Index into features array (0-based)
                 },
                 required: ['title', 'description']
             }
@@ -95,13 +96,19 @@ For questions (ask 2-4 at a time):
 {"type":"questions","questions":[{"id":"q1","text":"Question?","questionType":"choice","options":["A","B"]}]}
 
 For proposal (when you have enough info):
-{"type":"proposal","requirementDoc":"# Title...","requirementPath":"docs/requirements/name.md","features":[],"tasks":[{"title":"Task","description":"..."}],"proposedDesignMd":"# Design Guide\\n..."}
+{"type":"proposal","requirementDoc":"# Title...","requirementPath":"docs/requirements/name.md","features":[{"title":"Feature Name","description":"..."}],"tasks":[{"title":"Task","description":"...","featureIndex":0}],"proposedDesignMd":"# Design Guide\\n..."}
 
 Rules:
 - Ask 2-4 questions per round
 - Prefer questionType "choice" with options over "text"
 - Go to proposal when you understand the requirements
-- For task scope: empty features, single task, empty requirementDoc/requirementPath
+- For task scope: empty features, single task (no featureIndex), empty requirementDoc/requirementPath
+
+CRITICAL - Tasks and Features:
+- Every task MUST have a featureIndex linking it to a feature (0-based index into features array)
+- Never create standalone tasks when features exist - all tasks belong to a feature
+- Never create features without tasks - every feature needs at least one task
+- Example: features:[{title:"Auth"}], tasks:[{title:"Login form",featureIndex:0},{title:"Logout",featureIndex:0}]
 
 Design decisions (design.md scope):
 - design.md is for VISUAL and UI PATTERNS ONLY: colors, typography, spacing, button styles, confirmation behaviors, empty states, loading states

@@ -484,6 +484,19 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 onProposal: async (proposal: InterviewProposal) => {
                     this.currentProposal = proposal;
 
+                    // For simple task scope (single task, no features, no design changes),
+                    // auto-approve without showing the review panel
+                    const isSimpleTask = this.interviewScope === 'task' &&
+                        proposal.features.length === 0 &&
+                        proposal.tasks.length === 1 &&
+                        !proposal.proposedDesignMd;
+
+                    if (isSimpleTask) {
+                        // Auto-approve the simple task
+                        await this.handleApproveProposal();
+                        return;
+                    }
+
                     // Read current design.md for diff view
                     if (proposal.proposedDesignMd) {
                         const designPath = path.join(this.workspaceRoot, 'docs', 'requirements', 'design.md');
@@ -503,7 +516,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         });
                     }
 
-                    // Auto-open the proposal panel in editor area
+                    // Open the proposal panel in editor area for review
                     this.openProposalPanel();
                 },
                 onComplete: (requirementPath: string) => {
