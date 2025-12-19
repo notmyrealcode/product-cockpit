@@ -2,7 +2,7 @@
   "name": "shepherd",
   "displayName": "Shepherd",
   "description": "Product copilot for AI coding agents",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "publisher": "JustinEckhouse",
   "author": "Justin Eckhouse",
@@ -16,8 +16,12 @@
   "activationEvents": [
     "onStartupFinished",
     "onView:shepherd.welcomeView",
+    "onView:shepherd.shortcutView",
     "onCommand:shepherd.openWalkthrough",
-    "onCommand:shepherd.initialize"
+    "onCommand:shepherd.initialize",
+    "onCommand:shepherd.setupVoice",
+    "onCommand:shepherd.skipVoiceSetup",
+    "onCommand:shepherd.openSidebar"
   ],
   "main": "./out/extension.js",
   "contributes": {
