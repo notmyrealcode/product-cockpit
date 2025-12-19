@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Product Cockpit is a VS Code extension that provides product managers with a visual interface for managing tasks and requirements when working with AI coding agents. Key features include:
+Shepherd is a VS Code extension that provides product managers with a visual interface for managing tasks and requirements when working with AI coding agents. Key features include:
 
 - Voice-first task capture with local transcription (Parakeet/Whisper)
 - Visual drag-to-prioritize task queue
@@ -49,7 +49,7 @@ This project is in the requirements/planning phase. The `docs/pm-cockpit-require
 ## Technical Stack
 
 - **Extension:** TypeScript, VS Code Extension API
-- **Storage:** SQLite via sql.js (`.pmcockpit/data.db`)
+- **Storage:** SQLite via sql.js (`.shepherd/data.db`)
 - **MCP Server:** TypeScript
 - **Voice Transcription:** whisper.cpp (local)
 - **Requirements Storage:** Markdown files in `docs/requirements/`
@@ -58,8 +58,8 @@ This project is in the requirements/planning phase. The `docs/pm-cockpit-require
 ## Architecture
 
 ### Data Storage
-- `.pmcockpit/data.db` - SQLite database (sql.js)
-- `.pmcockpit/mcp-server.js` - MCP server
+- `.shepherd/data.db` - SQLite database (sql.js)
+- `.shepherd/mcp-server.js` - MCP server
 - `docs/requirements/` - Requirement markdown files
 - `.mcp.json` - MCP server configuration
 

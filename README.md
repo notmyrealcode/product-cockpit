@@ -24,7 +24,7 @@ A VS Code extension that helps product managers work with AI coding agents like 
 2. Click the Shepherd icon in the activity bar (left sidebar)
 3. Click "Initialize Shepherd" when prompted
 4. Shepherd creates:
-   - `.pmcockpit/` — Data storage and MCP server
+   - `.shepherd/` — Data storage and MCP server
    - `docs/requirements/` — Requirements documents
    - `.mcp.json` — Claude Code MCP configuration
 

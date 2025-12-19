@@ -21,11 +21,75 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register initialize command (always available)
     context.subscriptions.push(
-        vscode.commands.registerCommand('pmcockpit.initialize', async () => {
+        vscode.commands.registerCommand('shepherd.initialize', async () => {
+            console.log('[Shepherd] Initialize command called');
             const success = await initialize(workspaceRoot);
+            console.log('[Shepherd] Initialize result:', success);
             if (success) {
                 await activateExtension(context, workspaceRoot);
+                console.log('[Shepherd] activateExtension complete');
+
+                // Set walkthrough-specific context to mark step 1 complete
+                await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.initDone', true);
+                console.log('[Shepherd] Set walkthrough.initDone context');
+
+                // Re-open walkthrough after a delay to show updated progress
+                setTimeout(() => {
+                    vscode.commands.executeCommand(
+                        'workbench.action.openWalkthrough',
+                        'justineckhouse.shepherd#shepherd.welcome',
+                        false
+                    );
+                }, 300);
             }
+        })
+    );
+
+    // Register command to open walkthrough
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shepherd.openWalkthrough', () => {
+            vscode.commands.executeCommand(
+                'workbench.action.openWalkthrough',
+                'justineckhouse.shepherd#shepherd.welcome',
+                false
+            );
+        })
+    );
+
+    // Register command to trigger voice setup (must be registered before init so walkthrough button works)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shepherd.setupVoice', async () => {
+            console.log('[Shepherd] setupVoice command called');
+            if (!webviewProvider) {
+                vscode.window.showWarningMessage('Please complete initialization first.');
+                return;
+            }
+            await vscode.commands.executeCommand('shepherd.taskView.focus');
+            await webviewProvider.triggerVoiceSetup();
+        })
+    );
+
+    // Register command to skip voice setup
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shepherd.skipVoiceSetup', async () => {
+            console.log('[Shepherd] skipVoiceSetup command called');
+            await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.voiceDone', true);
+
+            // Re-open walkthrough to show next step
+            setTimeout(() => {
+                vscode.commands.executeCommand(
+                    'workbench.action.openWalkthrough',
+                    'justineckhouse.shepherd#shepherd.welcome',
+                    false
+                );
+            }, 300);
+        })
+    );
+
+    // Register command to open sidebar
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shepherd.openSidebar', async () => {
+            await vscode.commands.executeCommand('shepherd.taskView.focus');
         })
     );
 
@@ -33,20 +97,20 @@ export async function activate(context: vscode.ExtensionContext) {
     if (isInitialized(workspaceRoot)) {
         await activateExtension(context, workspaceRoot);
     } else {
-        // Prompt user to initialize
-        const choice = await vscode.window.showInformationMessage(
-            'Product Cockpit is not initialized in this workspace.',
-            'Initialize Now'
+        // Open walkthrough for new users
+        vscode.commands.executeCommand(
+            'workbench.action.openWalkthrough',
+            'justineckhouse.shepherd#shepherd.welcome',
+            false
         );
-        if (choice === 'Initialize Now') {
-            vscode.commands.executeCommand('pmcockpit.initialize');
-        }
     }
 }
 
 async function activateExtension(context: vscode.ExtensionContext, workspaceRoot: string): Promise<void> {
     // Set context for UI visibility
-    vscode.commands.executeCommand('setContext', 'pmcockpit.initialized', true);
+    console.log('[Shepherd] Setting context shepherd.initialized = true');
+    await vscode.commands.executeCommand('setContext', 'shepherd.initialized', true);
+    console.log('[Shepherd] Context set');
 
     // Check for Claude Code CLI
     const hasClaudeCode = await checkClaudeCodeInstalled();
@@ -97,18 +161,11 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     // Force the webview to be created by focusing the view
     // Small delay to ensure VS Code UI is ready
     setTimeout(() => {
-        vscode.commands.executeCommand('pmcockpit.taskView.focus');
+        vscode.commands.executeCommand('shepherd.taskView.focus');
     }, 100);
 
-    // Register command to open sidebar (view is already in auxiliary bar via package.json)
-    context.subscriptions.push(
-        vscode.commands.registerCommand('pmcockpit.openSidebar', async () => {
-            await vscode.commands.executeCommand('pmcockpit.taskView.focus');
-        })
-    );
-
     // Create a tree view for the shortcut that auto-opens the main view
-    const shortcutTreeView = vscode.window.createTreeView('pmcockpit.shortcutView', {
+    const shortcutTreeView = vscode.window.createTreeView('shepherd.shortcutView', {
         treeDataProvider: {
             getTreeItem: () => new vscode.TreeItem(''),
             getChildren: () => []
@@ -118,7 +175,7 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     shortcutTreeView.onDidChangeVisibility(e => {
         if (e.visible) {
             // Immediately focus the real view in secondary sidebar
-            vscode.commands.executeCommand('pmcockpit.taskView.focus');
+            vscode.commands.executeCommand('shepherd.taskView.focus');
         }
     });
 

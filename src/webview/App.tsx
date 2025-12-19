@@ -26,6 +26,7 @@ import { RequirementsInterview } from './components/RequirementsInterview';
 import { AddMenu } from './components/AddMenu';
 import { RecordButton } from './components/RecordButton';
 import { Toast, ToastType } from './components/Toast';
+import { VoiceSetupModal } from './components/VoiceSetupModal';
 import { Button } from './components/ui';
 import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
 
@@ -69,6 +70,14 @@ export default function App() {
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  // Voice setup modal state
+  const [voiceSetup, setVoiceSetup] = useState<{
+    needsSox: boolean;
+    needsWhisperBinary: boolean;
+    needsWhisperModel: boolean;
+    platform: string;
+  } | null>(null);
 
   // Interview state
   const [interviewActive, setInterviewActive] = useState(false);
@@ -238,6 +247,17 @@ export default function App() {
           break;
         case 'showToast':
           setToast({ message: message.message, type: message.toastType || 'info' });
+          break;
+        case 'showSetup':
+          setVoiceSetup({
+            needsSox: message.needsSox,
+            needsWhisperBinary: message.needsWhisperBinary,
+            needsWhisperModel: message.needsWhisperModel,
+            platform: message.platform,
+          });
+          break;
+        case 'setupComplete':
+          setVoiceSetup(null);
           break;
         // voiceTranscribed and voiceError are handled by RecordButton component
       }
@@ -950,6 +970,17 @@ export default function App() {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Voice Setup Modal */}
+      {voiceSetup && (
+        <VoiceSetupModal
+          needsSox={voiceSetup.needsSox}
+          needsWhisperBinary={voiceSetup.needsWhisperBinary}
+          needsWhisperModel={voiceSetup.needsWhisperModel}
+          platform={voiceSetup.platform}
+          onClose={() => setVoiceSetup(null)}
         />
       )}
     </div>

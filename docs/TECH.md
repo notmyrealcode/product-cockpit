@@ -1,4 +1,4 @@
-# Product Cockpit Technical Architecture
+# Shepherd Technical Architecture
 
 ## Overview
 
@@ -19,7 +19,7 @@ VS Code extension with React Webview UI and MCP server for Claude Code task mana
 ┌─────────────────┐     └────────┬───────┘
 │ WebviewProvider │              │
 └─────────────────┘              ▼
-                        .pmcockpit/data.db (SQLite via sql.js)
+                        .shepherd/data.db (SQLite via sql.js)
 ```
 
 ### Database (`src/db/`)
@@ -57,9 +57,9 @@ Key components:
 - `RequirementsInterview.tsx` - Modal for Claude interview workflow
 
 ### HttpBridge (`src/http/bridge.ts`)
-Localhost HTTP server on random port. Writes port to `.pmcockpit/.port`. Routes MCP tool calls to TaskStore.
+Localhost HTTP server on random port. Writes port to `.shepherd/.port`. Routes MCP tool calls to TaskStore.
 
-### MCP Server (`.pmcockpit/mcp-server.js`)
+### MCP Server (`.shepherd/mcp-server.js`)
 Standalone stdio server spawned by Claude Code. Reads port file, proxies JSON-RPC to HTTP bridge.
 
 ## UI Architecture
@@ -174,14 +174,14 @@ interface Task {
 
 | File | Purpose |
 |------|---------|
-| `.pmcockpit/data.db` | SQLite database (sql.js) |
-| `.pmcockpit/.initialized` | Initialization marker |
-| `.pmcockpit/mcp-server.js` | MCP server |
-| `.pmcockpit/.port` | HTTP bridge port |
-| `.pmcockpit/COPILOT.md` | Auto-generated AI context index |
-| `.pmcockpit/whisper/config.json` | Selected model config |
-| `.pmcockpit/whisper/models/*.bin` | Downloaded Whisper models |
-| `.pmcockpit/whisper/bin/` | whisper.cpp binary (Windows) |
+| `.shepherd/data.db` | SQLite database (sql.js) |
+| `.shepherd/.initialized` | Initialization marker |
+| `.shepherd/mcp-server.js` | MCP server |
+| `.shepherd/.port` | HTTP bridge port |
+| `.shepherd/COPILOT.md` | Auto-generated AI context index |
+| `.shepherd/whisper/config.json` | Selected model config |
+| `~/Library/Application Support/shepherd/whisper/models/*.bin` | Shared Whisper models (macOS) |
+| `.shepherd/whisper/bin/` | whisper.cpp binary (local build) |
 | `docs/requirements/*.md` | Requirement docs |
 | `docs/requirements/design.md` | Global design guide |
 | `CLAUDE.md` | Project instructions for Claude |
@@ -242,7 +242,7 @@ Manages whisper.cpp binary with smart detection:
 | small | 466 MB | Better accuracy |
 | medium | 1.5 GB | Best accuracy, slowest |
 
-Models downloaded from Hugging Face on first use. Stored in `.pmcockpit/whisper/models/`.
+Models downloaded from Hugging Face on first use. Stored in shared user-level directory (e.g., `~/Library/Application Support/shepherd/whisper/models/` on macOS).
 
 ### Message Flow (Normal Mode)
 1. Webview sends `startRecording` message
@@ -304,13 +304,13 @@ Manages context files that help AI assistants understand the project.
 ### Files
 | File | Purpose |
 |------|---------|
-| `.pmcockpit/COPILOT.md` | Auto-generated index of requirements and features |
+| `.shepherd/COPILOT.md` | Auto-generated index of requirements and features |
 | `docs/requirements/design.md` | Global design guide for UI patterns |
 | `CLAUDE.md` | Project instructions with reference to COPILOT.md |
 
 ### ProjectContext (`src/context/ProjectContext.ts`)
 Initializes on extension activation:
-1. Creates `.pmcockpit/` and `docs/requirements/` directories
+1. Creates `.shepherd/` and `docs/requirements/` directories
 2. Generates `COPILOT.md` with requirements index and feature list
 3. Creates `design.md` template if missing
 4. Creates or updates `CLAUDE.md` with reference to COPILOT.md

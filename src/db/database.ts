@@ -7,14 +7,23 @@ let db: Database | null = null;
 let dbPath: string | null = null;
 
 export async function initDatabase(workspaceRoot: string): Promise<Database> {
-    const SQL = await initSqlJs();
+    // Locate WASM file - when bundled it's in the same directory as the extension
+    const wasmPath = path.join(__dirname, 'sql-wasm.wasm');
+    const SQL = await initSqlJs({
+        locateFile: (file: string) => {
+            if (file === 'sql-wasm.wasm' && fs.existsSync(wasmPath)) {
+                return wasmPath;
+            }
+            return file;
+        }
+    });
 
-    const pmcockpitDir = path.join(workspaceRoot, '.pmcockpit');
-    if (!fs.existsSync(pmcockpitDir)) {
-        fs.mkdirSync(pmcockpitDir, { recursive: true });
+    const shepherdDir = path.join(workspaceRoot, '.shepherd');
+    if (!fs.existsSync(shepherdDir)) {
+        fs.mkdirSync(shepherdDir, { recursive: true });
     }
 
-    dbPath = path.join(pmcockpitDir, 'cockpit.db');
+    dbPath = path.join(shepherdDir, 'cockpit.db');
 
     if (fs.existsSync(dbPath)) {
         const buffer = fs.readFileSync(dbPath);

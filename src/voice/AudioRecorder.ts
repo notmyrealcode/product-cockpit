@@ -56,7 +56,7 @@ export class AudioRecorder {
         }
 
         // Create output directory
-        const audioDir = path.join(this.workspaceRoot, '.pmcockpit', 'audio');
+        const audioDir = path.join(this.workspaceRoot, '.shepherd', 'audio');
         await fs.promises.mkdir(audioDir, { recursive: true });
 
         this.outputPath = path.join(audioDir, `recording-${Date.now()}.wav`);

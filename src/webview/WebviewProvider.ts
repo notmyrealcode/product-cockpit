@@ -6,6 +6,7 @@ import { WhisperService } from '../voice/WhisperService';
 import { AudioRecorder } from '../voice/AudioRecorder';
 import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage, InterviewScope, InterviewContext } from '../interview/InterviewService';
 import { ProjectContext } from '../context/ProjectContext';
+import { TASK_PARSER_PROMPT, TASK_PARSER_SCHEMA } from '../prompts';
 import type { Task } from '../tasks/types';
 
 import { exec } from 'child_process';
@@ -36,7 +37,7 @@ interface RequirementIndex {
 }
 
 export class TaskWebviewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'pmcockpit.taskView';
+    public static readonly viewType = 'shepherd.taskView';
     private _view?: vscode.WebviewView;
     private readonly _disposables: vscode.Disposable[] = [];
     private readonly requirementsDir: string;
@@ -58,7 +59,6 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         private readonly workspaceRoot: string
     ) {
         log('WebviewProvider constructor called');
-        outputChannel.show(true); // Show the output channel (true = preserve focus)
 
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
         this.requirementsIndexPath = path.join(this.requirementsDir, '.index.json');
@@ -85,6 +85,50 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
 
     dispose(): void {
         this._disposables.forEach(d => d.dispose());
+    }
+
+    /**
+     * Triggers the voice setup flow - checks dependencies and shows setup modal if needed.
+     * Called from shepherd.setupVoice command.
+     */
+    public async triggerVoiceSetup(): Promise<void> {
+        log('triggerVoiceSetup called, _view exists: ' + !!this._view);
+
+        // Wait for view to be ready if it isn't yet
+        if (!this._view) {
+            // View not ready - wait a bit for it to initialize
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        if (!this._view) {
+            vscode.window.showWarningMessage('Please open the Shepherd sidebar first, then try again.');
+            return;
+        }
+
+        // Ensure view is visible
+        this._view.show(true);
+
+        // Check voice dependencies and show setup modal
+        const audioCheck = await this.audioRecorder.isAvailable();
+        const whisperBinary = await this.whisperService.getBinaryPath();
+        const whisperModel = await this.whisperService.getModelPath();
+
+        log('Voice setup check - sox: ' + audioCheck.available + ', whisper: ' + !!whisperBinary + ', model: ' + !!whisperModel);
+
+        if (audioCheck.available && whisperBinary && whisperModel) {
+            // Already set up - set walkthrough context
+            await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.voiceDone', true);
+            vscode.window.showInformationMessage('Voice capture is ready to use! Click the microphone button to record.');
+        } else {
+            // Show setup modal
+            this._view.webview.postMessage({
+                type: 'showSetup',
+                needsSox: !audioCheck.available,
+                needsWhisperBinary: !whisperBinary,
+                needsWhisperModel: !whisperModel,
+                platform: process.platform
+            });
+        }
     }
 
     public resolveWebviewView(
@@ -259,7 +303,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const features = this.taskStore.getFeatures();
             const tasks = this.taskStore.getTasks();
             const requirements = await this.getRequirements();
-            const parserModel = vscode.workspace.getConfiguration('pmcockpit').get<string>('parserModel', 'haiku');
+            const parserModel = vscode.workspace.getConfiguration('shepherd').get<string>('parserModel', 'haiku');
             log('Sending initialized with ' + tasks.length + ' tasks, ' + features.length + ' features');
             this._view.webview.postMessage({
                 type: 'initialized',
@@ -276,7 +320,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async setParserModel(model: string): Promise<void> {
-        await vscode.workspace.getConfiguration('pmcockpit').update('parserModel', model, vscode.ConfigurationTarget.Global);
+        await vscode.workspace.getConfiguration('shepherd').update('parserModel', model, vscode.ConfigurationTarget.Global);
     }
 
     private async sendRequirements(): Promise<void> {
@@ -764,10 +808,21 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         console.log('[WebviewProvider] whisperReady:', whisperReady);
 
         if (audioCheck.available && whisperReady) {
-            // All good - notify webview to close setup and optionally start recording
+            // All good - set walkthrough context and notify webview
+            await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.voiceDone', true);
             if (this._view) {
                 this._view.webview.postMessage({ type: 'setupComplete' });
             }
+            vscode.window.showInformationMessage('Voice capture is ready!');
+
+            // Re-open walkthrough to show next step
+            setTimeout(() => {
+                vscode.commands.executeCommand(
+                    'workbench.action.openWalkthrough',
+                    'justineckhouse.shepherd#shepherd.welcome',
+                    false
+                );
+            }, 300);
         } else {
             // Still missing something - update the setup modal
             if (this._view) {
@@ -783,10 +838,17 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleDownloadModel(): Promise<void> {
-        const success = await this.whisperService.promptModelSelection();
-        if (success) {
-            // Re-check setup after model download
-            await this.handleCheckSetup();
+        console.log('[WebviewProvider] handleDownloadModel called');
+        try {
+            const success = await this.whisperService.promptModelSelection();
+            console.log('[WebviewProvider] promptModelSelection result:', success);
+            if (success) {
+                // Re-check setup after model download
+                await this.handleCheckSetup();
+            }
+        } catch (error) {
+            console.error('[WebviewProvider] handleDownloadModel error:', error);
+            throw error;
         }
     }
 
@@ -838,8 +900,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         // Simple prompt - Claude uses MCP tools to get details
         const ids = taskIds.join(', ');
         const prompt = taskIds.length === 1
-            ? `Build task ${ids}. Use pmcockpit MCP tools to get details. Set status to ready-for-signoff when complete.`
-            : `Build these tasks in order: ${ids}. Use pmcockpit MCP tools to get details. Set each task to ready-for-signoff when complete.`;
+            ? `Build task ${ids}. Use shepherd MCP tools to get details. Set status to ready-for-signoff when complete.`
+            : `Build these tasks in order: ${ids}. Use shepherd MCP tools to get details. Set each task to ready-for-signoff when complete.`;
 
         this.buildTerminal.sendText(`claude "${prompt}"`, true); // true = add newline/enter
         this.buildTerminal.show();
@@ -988,7 +1050,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
 
         try {
             // Write prompt to temp file to avoid shell escaping issues
-            const tmpFile = path.join(os.tmpdir(), `pmcockpit-prompt-${Date.now()}.txt`);
+            const tmpFile = path.join(os.tmpdir(), `shepherd-prompt-${Date.now()}.txt`);
             await fs.promises.writeFile(tmpFile, prompt);
             console.log(`[PMCockpit] +${Date.now() - startTime}ms - Wrote temp file`);
 
@@ -998,33 +1060,16 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             delete env.ENABLE_IDE_INTEGRATION;
 
             // Get configured model for parsing (default to Haiku for speed)
-            const parserModel = vscode.workspace.getConfiguration('pmcockpit').get<string>('parserModel', 'haiku');
+            const parserModel = vscode.workspace.getConfiguration('shepherd').get<string>('parserModel', 'haiku');
             console.log('[PMCockpit] Using parser model:', parserModel);
 
             // Use spawn with login shell to get proper PATH
             const stdout = await new Promise<string>((resolve, reject) => {
                 // --output-format json for structured output, --strict-mcp-config to skip MCP loading
                 // --tools "" to disable tools, --system-prompt to override default behavior
-                // --json-schema to enforce output structure
-                const systemPrompt = 'You are a minimal task parser. One user request = one task. Never split into sub-tasks.';
-                const taskSchema = JSON.stringify({
-                    type: 'object',
-                    properties: {
-                        tasks: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    title: { type: 'string' },
-                                    description: { type: 'string' }
-                                },
-                                required: ['title', 'description']
-                            }
-                        }
-                    },
-                    required: ['tasks']
-                });
-                const cmd = `cat "${tmpFile}" | claude -p --model ${parserModel} --output-format json --strict-mcp-config --tools "" --system-prompt "${systemPrompt}" --json-schema '${taskSchema}' -`;
+                // --json-schema to enforce output structure (prompts from centralized file)
+                const taskSchema = JSON.stringify(TASK_PARSER_SCHEMA);
+                const cmd = `cat "${tmpFile}" | claude -p --model ${parserModel} --output-format json --strict-mcp-config --tools "" --system-prompt "${TASK_PARSER_PROMPT}" --json-schema '${taskSchema}' -`;
                 console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: ${cmd}`);
                 const proc = spawn('/bin/zsh', ['-l', '-c', cmd], {
                     cwd: this.workspaceRoot,

@@ -36,7 +36,7 @@ export class HttpBridge {
     }
 
     private writePortFile(): void {
-        const portFile = path.join(this.workspaceRoot, '.pmcockpit', '.port');
+        const portFile = path.join(this.workspaceRoot, '.shepherd', '.port');
         fs.writeFileSync(portFile, String(this.port));
     }
 
@@ -213,7 +213,7 @@ export class HttpBridge {
     stop(): void {
         if (this.server) {
             this.server.close();
-            const portFile = path.join(this.workspaceRoot, '.pmcockpit', '.port');
+            const portFile = path.join(this.workspaceRoot, '.shepherd', '.port');
             try {
                 fs.unlinkSync(portFile);
             } catch {

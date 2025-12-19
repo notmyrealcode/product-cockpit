@@ -52,9 +52,29 @@ export class WhisperService {
     private readonly configPath: string;
 
     constructor(private readonly workspaceRoot: string) {
-        this.binDir = path.join(workspaceRoot, '.pmcockpit', 'whisper', 'bin');
-        this.modelsDir = path.join(workspaceRoot, '.pmcockpit', 'whisper', 'models');
-        this.configPath = path.join(workspaceRoot, '.pmcockpit', 'whisper', 'config.json');
+        this.binDir = path.join(workspaceRoot, '.shepherd', 'whisper', 'bin');
+        this.modelsDir = this.getSharedModelsDir();
+        this.configPath = path.join(workspaceRoot, '.shepherd', 'whisper', 'config.json');
+    }
+
+    /**
+     * Get the shared user-level directory for whisper models.
+     * Models are shared across all workspaces to avoid duplication.
+     */
+    private getSharedModelsDir(): string {
+        const platform = process.platform;
+        const home = process.env.HOME || process.env.USERPROFILE || '';
+
+        if (platform === 'darwin') {
+            return path.join(home, 'Library', 'Application Support', 'shepherd', 'whisper', 'models');
+        } else if (platform === 'win32') {
+            const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+            return path.join(appData, 'shepherd', 'whisper', 'models');
+        } else {
+            // Linux and other Unix-like systems
+            const xdgData = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share');
+            return path.join(xdgData, 'shepherd', 'whisper', 'models');
+        }
     }
 
     async isReady(): Promise<boolean> {
@@ -345,8 +365,8 @@ export class WhisperService {
     }
 
     private async buildFromSource(): Promise<string | null> {
-        const srcDir = path.join(this.workspaceRoot, '.pmcockpit', 'whisper', 'src');
-        const localBinDir = path.join(this.workspaceRoot, '.pmcockpit', 'whisper', 'bin');
+        const srcDir = path.join(this.workspaceRoot, '.shepherd', 'whisper', 'src');
+        const localBinDir = path.join(this.workspaceRoot, '.shepherd', 'whisper', 'bin');
         const binaryDest = path.join(localBinDir, 'whisper');
 
         // Check if already built

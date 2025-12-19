@@ -1,0 +1,48 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .bg { fill: var(--vscode-editor-background, #1e1e1e); }
+    .fg { fill: var(--vscode-foreground, #cccccc); }
+    .accent { fill: var(--vscode-textLink-foreground, #3A6F74); }
+    .muted { fill: var(--vscode-descriptionForeground, #8b8b8b); }
+    .border { stroke: var(--vscode-panel-border, #3c3c3c); fill: none; stroke-width: 1.5; }
+    .folder { fill: var(--vscode-textLink-foreground, #3A6F74); }
+    .file { fill: var(--vscode-foreground, #cccccc); }
+  </style>
+
+  <!-- Background -->
+  <rect width="256" height="256" class="bg"/>
+
+  <!-- Folder icon for .shepherd/ -->
+  <g transform="translate(50, 50)">
+    <!-- Folder back -->
+    <path d="M4 12 L4 52 L60 52 L60 12 L28 12 L24 6 L4 6 Z" class="folder" opacity="0.8"/>
+    <!-- Folder front -->
+    <path d="M0 16 L0 56 L56 56 L56 16 Z" class="folder"/>
+    <!-- Label -->
+    <text x="70" y="38" font-family="monospace" font-size="12" class="fg">.shepherd/</text>
+  </g>
+
+  <!-- File icon for mcp-server.js -->
+  <g transform="translate(74, 100)">
+    <rect x="0" y="0" width="32" height="40" rx="2" class="border"/>
+    <path d="M0 0 L22 0 L32 10 L32 40 L0 40 Z" class="file" opacity="0.2"/>
+    <path d="M22 0 L22 10 L32 10" class="border"/>
+    <text x="42" y="26" font-family="monospace" font-size="10" class="muted">mcp-server.js</text>
+  </g>
+
+  <!-- File icon for .mcp.json -->
+  <g transform="translate(50, 155)">
+    <!-- Folder back -->
+    <path d="M4 12 L4 52 L60 52 L60 12 L28 12 L24 6 L4 6 Z" class="folder" opacity="0.8"/>
+    <!-- Folder front -->
+    <path d="M0 16 L0 56 L56 56 L56 16 Z" class="folder"/>
+    <!-- Label -->
+    <text x="70" y="38" font-family="monospace" font-size="12" class="fg">.mcp.json</text>
+  </g>
+
+  <!-- Checkmark indicator -->
+  <g transform="translate(195, 45)">
+    <circle cx="20" cy="20" r="18" class="accent"/>
+    <path d="M12 20 L18 26 L28 14" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

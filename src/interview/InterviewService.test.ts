@@ -1,53 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { execSync } from 'child_process';
+import { INTERVIEW_RESPONSE_SCHEMA } from '../prompts';
 
-// Extract the schema from InterviewService for testing
-// In a real setup, we'd export this from the module
-const RESPONSE_SCHEMA = {
-    type: 'object',
-    properties: {
-        type: { type: 'string', enum: ['questions', 'proposal'] },
-        questions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string' },
-                    text: { type: 'string' },
-                    questionType: { type: 'string', enum: ['choice', 'text'] },
-                    options: { type: 'array', items: { type: 'string' } }
-                },
-                required: ['id', 'text', 'questionType']
-            }
-        },
-        requirementDoc: { type: 'string' },
-        requirementPath: { type: 'string' },
-        features: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' }
-                },
-                required: ['title', 'description']
-            }
-        },
-        tasks: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    featureIndex: { type: 'number' }
-                },
-                required: ['title', 'description']
-            }
-        }
-    },
-    required: ['type']
-};
+// Use the centralized schema
+const RESPONSE_SCHEMA = INTERVIEW_RESPONSE_SCHEMA;
 
 describe('InterviewService Schema', () => {
     it('schema has type: object at root (required by Claude CLI)', () => {

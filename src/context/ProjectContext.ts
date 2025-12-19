@@ -5,18 +5,18 @@ import type { Feature } from '../db/types';
 
 /**
  * Manages project context files for AI assistants:
- * - .pmcockpit/COPILOT.md - Auto-generated context
+ * - .shepherd/COPILOT.md - Auto-generated context
  * - docs/requirements/design.md - Global design guide
  * - CLAUDE.md - User's file with reference to COPILOT.md
  */
 export class ProjectContext {
     private readonly workspaceRoot: string;
-    private readonly pmcockpitDir: string;
+    private readonly shepherdDir: string;
     private readonly requirementsDir: string;
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
-        this.pmcockpitDir = path.join(workspaceRoot, '.pmcockpit');
+        this.shepherdDir = path.join(workspaceRoot, '.shepherd');
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
     }
 
@@ -26,7 +26,7 @@ export class ProjectContext {
      */
     async initialize(): Promise<void> {
         // Ensure directories exist
-        await fs.promises.mkdir(this.pmcockpitDir, { recursive: true });
+        await fs.promises.mkdir(this.shepherdDir, { recursive: true });
         await fs.promises.mkdir(this.requirementsDir, { recursive: true });
 
         // Create files if missing
@@ -36,10 +36,10 @@ export class ProjectContext {
     }
 
     /**
-     * Create .pmcockpit/COPILOT.md if missing
+     * Create .shepherd/COPILOT.md if missing
      */
     private async ensureCopilotMd(): Promise<void> {
-        const copilotPath = path.join(this.pmcockpitDir, 'COPILOT.md');
+        const copilotPath = path.join(this.shepherdDir, 'COPILOT.md');
 
         if (!fs.existsSync(copilotPath)) {
             await fs.promises.writeFile(copilotPath, this.getCopilotTemplate(), 'utf-8');
@@ -70,7 +70,7 @@ export class ProjectContext {
         } else {
             // Check if reference exists
             const content = await fs.promises.readFile(claudePath, 'utf-8');
-            if (!content.includes('COPILOT.md') && !content.includes('.pmcockpit')) {
+            if (!content.includes('COPILOT.md') && !content.includes('.shepherd')) {
                 // Prompt user to add reference
                 const choice = await vscode.window.showInformationMessage(
                     'Add Product Cockpit context reference to CLAUDE.md? This helps Claude find your requirements and design guide.',
@@ -91,7 +91,7 @@ export class ProjectContext {
     private async injectClaudeReference(claudePath: string, existingContent: string): Promise<void> {
         const reference = `
 ## Product Cockpit Context
-See [.pmcockpit/COPILOT.md](.pmcockpit/COPILOT.md) for requirements, design guide, and feature documentation managed by Product Cockpit.
+See [.shepherd/COPILOT.md](.shepherd/COPILOT.md) for requirements, design guide, and feature documentation managed by Shepherd.
 `;
         // Add after first heading or at the start
         let newContent: string;
@@ -113,7 +113,7 @@ See [.pmcockpit/COPILOT.md](.pmcockpit/COPILOT.md) for requirements, design guid
      * Called when requirements change
      */
     async updateCopilotMd(features: Feature[]): Promise<void> {
-        const copilotPath = path.join(this.pmcockpitDir, 'COPILOT.md');
+        const copilotPath = path.join(this.shepherdDir, 'COPILOT.md');
 
         // Get all requirement files
         const requirementFiles = await this.getRequirementFiles();
@@ -213,7 +213,7 @@ ${featuresSection}
         return `# CLAUDE.md
 
 ## Product Cockpit Context
-See [.pmcockpit/COPILOT.md](.pmcockpit/COPILOT.md) for requirements, design guide, and feature documentation managed by Product Cockpit.
+See [.shepherd/COPILOT.md](.shepherd/COPILOT.md) for requirements, design guide, and feature documentation managed by Shepherd.
 
 ## Development
 

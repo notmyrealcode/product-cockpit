@@ -104,7 +104,7 @@ process.stdin.on('data', async (chunk) => {
             let response;
 
             if (msg.method === 'initialize') {
-                response = { jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'pmcockpit', version: '0.0.1' } } };
+                response = { jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'shepherd', version: '0.0.1' } } };
             } else if (msg.method === 'tools/list') {
                 response = { jsonrpc: '2.0', id: msg.id, result: { tools: toolDefinitions } };
             } else if (msg.method === 'tools/call') {
@@ -126,32 +126,22 @@ process.stdin.on('data', async (chunk) => {
 `;
 
 export async function initialize(workspaceRoot: string): Promise<boolean> {
-    const choice = await vscode.window.showInformationMessage(
-        'Product Cockpit will create task storage (.pmcockpit/), requirements folder (docs/requirements/), and Claude Code configuration (.claude/). Continue?',
-        { modal: true },
-        'Initialize'
-    );
-
-    if (choice !== 'Initialize') {
-        return false;
-    }
-
-    const pmcockpitDir = path.join(workspaceRoot, '.pmcockpit');
+    const shepherdDir = path.join(workspaceRoot, '.shepherd');
     const requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
     const claudeDir = path.join(workspaceRoot, '.claude');
 
     // Create directories
-    await fs.promises.mkdir(pmcockpitDir, { recursive: true });
+    await fs.promises.mkdir(shepherdDir, { recursive: true });
     await fs.promises.mkdir(requirementsDir, { recursive: true });
     await fs.promises.mkdir(claudeDir, { recursive: true });
 
     // Database will be created by initDatabase() during extension activation
     // Just create a marker file to indicate initialization
-    const markerFile = path.join(pmcockpitDir, '.initialized');
+    const markerFile = path.join(shepherdDir, '.initialized');
     await fs.promises.writeFile(markerFile, new Date().toISOString());
 
     // Create MCP server
-    const mcpServerFile = path.join(pmcockpitDir, 'mcp-server.js');
+    const mcpServerFile = path.join(shepherdDir, 'mcp-server.js');
     await fs.promises.writeFile(mcpServerFile, MCP_SERVER_TEMPLATE);
 
     // Merge .claude/settings.json
@@ -160,8 +150,61 @@ export async function initialize(workspaceRoot: string): Promise<boolean> {
     // Create/merge .mcp.json at project root for Claude Code MCP integration
     await mergeClaudeMcp(workspaceRoot);
 
-    vscode.window.showInformationMessage('Product Cockpit initialized successfully!');
+    // Prompt to add .shepherd/ to .gitignore
+    await promptGitignore(workspaceRoot);
+
+    vscode.window.showInformationMessage('Shepherd initialized successfully!');
     return true;
+}
+
+async function promptGitignore(workspaceRoot: string): Promise<void> {
+    const gitignorePath = path.join(workspaceRoot, '.gitignore');
+    const shepherdPattern = '.shepherd/';
+
+    // Check if .gitignore exists and already has the pattern
+    try {
+        const content = await fs.promises.readFile(gitignorePath, 'utf-8');
+        if (content.includes(shepherdPattern) || content.includes('.shepherd')) {
+            return; // Already has the pattern
+        }
+    } catch {
+        // File doesn't exist, will prompt to create
+    }
+
+    const choice = await vscode.window.showInformationMessage(
+        'Should Shepherd files be added to .gitignore?',
+        {
+            modal: true,
+            detail: 'Yes (Recommended): Each developer has their own task queue and database.\n\nNo: Share task state across the team (commits tasks to repo).'
+        },
+        'Yes (Recommended)',
+        'No'
+    );
+
+    if (choice === 'Yes (Recommended)') {
+        await addToGitignore(gitignorePath, shepherdPattern);
+    }
+}
+
+async function addToGitignore(gitignorePath: string, pattern: string): Promise<void> {
+    try {
+        let content = '';
+        try {
+            content = await fs.promises.readFile(gitignorePath, 'utf-8');
+        } catch {
+            // File doesn't exist, will create
+        }
+
+        // Add pattern with a comment
+        const addition = content.length > 0 && !content.endsWith('\n')
+            ? `\n\n# Shepherd runtime data\n${pattern}\n`
+            : `\n# Shepherd runtime data\n${pattern}\n`;
+
+        await fs.promises.writeFile(gitignorePath, content + addition);
+    } catch (err) {
+        // Log but don't fail initialization
+        console.error('Failed to update .gitignore:', err);
+    }
 }
 
 async function mergeClaudeSettings(claudeDir: string): Promise<void> {
@@ -178,7 +221,7 @@ async function mergeClaudeSettings(claudeDir: string): Promise<void> {
     // Claude Code uses permissions.allow format
     const permissions = (settings.permissions as Record<string, unknown>) || {};
     const allow = (permissions.allow as string[]) || [];
-    const mcpPermission = 'mcp__pmcockpit';
+    const mcpPermission = 'mcp__shepherd';
 
     if (!allow.includes(mcpPermission)) {
         allow.push(mcpPermission);
@@ -187,10 +230,10 @@ async function mergeClaudeSettings(claudeDir: string): Promise<void> {
     permissions.allow = allow;
     settings.permissions = permissions;
 
-    // Auto-enable the pmcockpit MCP server
+    // Auto-enable the shepherd MCP server
     const enabledServers = (settings.enabledMcpjsonServers as string[]) || [];
-    if (!enabledServers.includes('pmcockpit')) {
-        enabledServers.push('pmcockpit');
+    if (!enabledServers.includes('shepherd')) {
+        enabledServers.push('shepherd');
     }
     settings.enabledMcpjsonServers = enabledServers;
 
@@ -212,11 +255,11 @@ async function mergeClaudeMcp(workspaceRoot: string): Promise<void> {
     const mcpServers = (mcp.mcpServers as Record<string, unknown>) || {};
     const expectedConfig = {
         command: 'node',
-        args: ['.pmcockpit/mcp-server.js']
+        args: ['.shepherd/mcp-server.js']
     };
 
-    // Check if pmcockpit is already configured correctly
-    const existing = mcpServers.pmcockpit as Record<string, unknown> | undefined;
+    // Check if shepherd is already configured correctly
+    const existing = mcpServers.shepherd as Record<string, unknown> | undefined;
     if (existing &&
         existing.command === expectedConfig.command &&
         JSON.stringify(existing.args) === JSON.stringify(expectedConfig.args)) {
@@ -224,18 +267,18 @@ async function mergeClaudeMcp(workspaceRoot: string): Promise<void> {
         return;
     }
 
-    // Add or update pmcockpit config
-    mcpServers.pmcockpit = expectedConfig;
+    // Add or update shepherd config
+    mcpServers.shepherd = expectedConfig;
     mcp.mcpServers = mcpServers;
     await fs.promises.writeFile(mcpFile, JSON.stringify(mcp, null, 2));
 }
 
 export function isInitialized(workspaceRoot: string): boolean {
-    const pmcockpitDir = path.join(workspaceRoot, '.pmcockpit');
+    const shepherdDir = path.join(workspaceRoot, '.shepherd');
     // Check for marker file (new) or database file or legacy tasks.json
-    const markerFile = path.join(pmcockpitDir, '.initialized');
-    const dbFile = path.join(pmcockpitDir, 'data.db');
-    const legacyTasksFile = path.join(pmcockpitDir, 'tasks.json');
+    const markerFile = path.join(shepherdDir, '.initialized');
+    const dbFile = path.join(shepherdDir, 'data.db');
+    const legacyTasksFile = path.join(shepherdDir, 'tasks.json');
     return fs.existsSync(markerFile) || fs.existsSync(dbFile) || fs.existsSync(legacyTasksFile);
 }
 
@@ -247,7 +290,7 @@ export function isInitialized(workspaceRoot: string): boolean {
 export async function updateMcpServer(workspaceRoot: string): Promise<void> {
     try {
         // Update MCP server script
-        const mcpServerFile = path.join(workspaceRoot, '.pmcockpit', 'mcp-server.js');
+        const mcpServerFile = path.join(workspaceRoot, '.shepherd', 'mcp-server.js');
         await fs.promises.writeFile(mcpServerFile, MCP_SERVER_TEMPLATE);
 
         // Ensure .mcp.json exists at project root

@@ -2,6 +2,9 @@ import { spawn, ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
 import { SessionRepo } from '../db/repositories/sessionRepo';
 import type { RequirementSession } from '../db/types';
+import { INTERVIEW_RESPONSE_SCHEMA, INTERVIEW_PROMPTS, type InterviewScope } from '../prompts';
+
+export type { InterviewScope };
 
 export interface InterviewQuestion {
     id: string;
@@ -39,159 +42,6 @@ export interface InterviewContext {
     existingRequirements?: { path: string; title: string; summary: string }[];
     currentDesignMd?: string;  // Empty string means file doesn't exist yet
 }
-
-// JSON Schema for structured output - forces Claude to return valid JSON
-// Note: Can't use oneOf at root level - must be type: object with discriminator field
-const RESPONSE_SCHEMA = {
-    type: 'object',
-    properties: {
-        type: { type: 'string', enum: ['questions', 'proposal'] },
-        // For questions type
-        questions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string' },
-                    text: { type: 'string' },
-                    questionType: { type: 'string', enum: ['choice', 'text'] },
-                    options: { type: 'array', items: { type: 'string' } }
-                },
-                required: ['id', 'text', 'questionType']
-            }
-        },
-        // For proposal type
-        requirementDoc: { type: 'string' },
-        requirementPath: { type: 'string' },
-        features: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' }
-                },
-                required: ['title', 'description']
-            }
-        },
-        tasks: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    featureIndex: { type: 'number' }
-                },
-                required: ['title', 'description']
-            }
-        },
-        // Complete proposed design.md content (full replacement, not append)
-        proposedDesignMd: { type: 'string' }
-    },
-    required: ['type']
-};
-
-const JSON_FORMAT_RULES = `You must respond with JSON matching the schema provided.
-
-For questions (ask 2-4 at a time):
-{"type":"questions","questions":[{"id":"q1","text":"Question?","questionType":"choice","options":["A","B"]}]}
-
-For proposal (when you have enough info):
-{"type":"proposal","requirementDoc":"# Title...","requirementPath":"docs/requirements/name.md","features":[],"tasks":[{"title":"Task","description":"..."}],"proposedDesignMd":"# Design Guide\\n..."}
-
-Rules:
-- Ask 2-4 questions per round
-- Prefer questionType "choice" with options over "text"
-- Go to proposal when you understand the requirements
-- For task scope: empty features, single task, empty requirementDoc/requirementPath
-
-Design decisions (design.md scope):
-- design.md is for VISUAL and UI PATTERNS ONLY: colors, typography, spacing, button styles, confirmation behaviors, empty states, loading states
-- Feature logic and behavior (what the feature DOES) belongs in the feature's requirementDoc, NOT in design.md
-- If visual/UI decisions were made, include FULL proposed design.md content in "proposedDesignMd"
-- proposedDesignMd must include ALL existing content you want to keep PLUS your changes (it replaces the file)
-- You will receive the current design.md content - use it as the base for your proposed version
-- Do NOT create standalone "design" tasks - incorporate design into implementation tasks`;
-
-const SYSTEM_PROMPTS = {
-    'project': `You are a requirements analyst helping define a project plan.
-
-CRITICAL - ACKNOWLEDGE USER INPUT:
-- If the user already specified details (colors, features, behavior), DO NOT ask about those things again
-- Only ask about things the user has NOT already told you
-- If the user gave enough detail, skip questions and go straight to proposal
-
-CONTEXT:
-- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY (colors, typography, spacing, confirmation behaviors, empty states)
-- Feature logic/behavior goes in the feature's requirementDoc
-- Each feature will have its own requirements file in docs/requirements/
-- The user message may include existing app context - use it to understand the project
-
-APPROACH:
-- First, acknowledge what the user already specified
-- Only ask about genuinely missing information
-- Prefer multiple-choice questions when possible
-- Don't over-question - 2-4 total questions is usually enough
-- Visual/UI patterns → design.md, feature logic/behavior → feature requirements
-
-PROPOSAL REQUIREMENTS:
-- ALWAYS include a non-empty requirementDoc with markdown describing the project
-- ALWAYS include a requirementPath like "docs/requirements/project-name.md"
-
-${JSON_FORMAT_RULES}`,
-
-    'new-feature': `You are a requirements analyst helping define a new feature for an EXISTING app.
-
-CRITICAL - ACKNOWLEDGE USER INPUT:
-- If the user already specified details (colors, behavior, implementation), DO NOT ask about those things again
-- Only ask about things the user has NOT already told you
-- If the user gave enough detail, skip questions and go straight to proposal
-
-CONTEXT:
-- The user message includes context about the existing app - READ IT CAREFULLY
-- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY (colors, typography, spacing, confirmation behaviors, empty states)
-- Feature logic/behavior goes in the feature's requirementDoc
-- This feature will get its own requirements file in docs/requirements/
-
-APPROACH:
-- First, acknowledge what the user already specified
-- Only ask about genuinely missing information needed to implement
-- Prefer multiple-choice questions when possible
-- Don't over-question - 1-3 questions is usually enough for a feature
-- Visual/UI patterns → design.md, feature logic/behavior → feature requirements
-
-PROPOSAL REQUIREMENTS:
-- ALWAYS include a non-empty requirementDoc with markdown describing the feature
-- ALWAYS include a requirementPath like "docs/requirements/feature-name.md"
-
-${JSON_FORMAT_RULES}`,
-
-    'task': `You are a task analyst helping define a clear, actionable task.
-
-CRITICAL: Tasks are meant to be simple and specific. Most task descriptions are clear enough to propose immediately.
-
-CRITICAL - ACKNOWLEDGE USER INPUT:
-- If the user specified what they want, DO NOT re-ask those details
-- Go straight to proposal if you have enough information
-
-CONTEXT:
-- Global design guide: docs/requirements/design.md - for VISUAL and UI patterns ONLY
-- Include implementation details in the task description, not as separate design tasks
-
-APPROACH:
-- If the task is clear (specific action + target), propose immediately without questions
-- Only ask if there's genuine ambiguity that would block implementation
-- If you must ask, ask 1-2 questions maximum in one round
-- Examples that need NO questions: "Add dark mode toggle", "Fix login button", "Update header"
-- Examples that might need questions: "Improve performance" (what metric?), "Add auth" (which method?)
-
-${JSON_FORMAT_RULES}
-
-For task scope: empty features array, single task in tasks array, empty requirementDoc and requirementPath.`
-};
-
-export type InterviewScope = 'project' | 'new-feature' | 'task';
 
 export class InterviewService {
     private process: ChildProcess | null = null;
@@ -387,12 +237,12 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         delete env.CLAUDE_CODE_SSE_PORT;
         delete env.ENABLE_IDE_INTEGRATION;
 
-        // Get scope-specific system prompt
-        const systemPrompt = SYSTEM_PROMPTS[this.scope];
+        // Get scope-specific system prompt from centralized prompts
+        const systemPrompt = INTERVIEW_PROMPTS[this.scope];
 
         // Escape for shell
         const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
-        const escapedSchema = JSON.stringify(RESPONSE_SCHEMA).replace(/'/g, "'\\''");
+        const escapedSchema = JSON.stringify(INTERVIEW_RESPONSE_SCHEMA).replace(/'/g, "'\\''");
 
         let cmd: string;
         if (isResume && this.claudeSessionId) {

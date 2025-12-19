@@ -1,0 +1,57 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .bg { fill: var(--vscode-editor-background, #1e1e1e); }
+    .fg { fill: var(--vscode-foreground, #cccccc); }
+    .accent { fill: var(--vscode-textLink-foreground, #3A6F74); }
+    .muted { fill: var(--vscode-descriptionForeground, #8b8b8b); }
+    .card-bg { fill: var(--vscode-editorWidget-background, #252526); }
+    .card-border { stroke: var(--vscode-editorWidget-border, #454545); fill: none; stroke-width: 1; }
+    .success { fill: #059669; }
+  </style>
+
+  <!-- Background -->
+  <rect width="256" height="256" class="bg"/>
+
+  <!-- Task card 1 -->
+  <g transform="translate(28, 35)">
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-bg"/>
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-border"/>
+    <!-- Checkbox -->
+    <rect x="12" y="17" width="20" height="20" rx="4" class="card-border"/>
+    <!-- Task title -->
+    <text x="42" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" class="fg">Add login page</text>
+    <!-- Priority pill -->
+    <rect x="150" y="15" width="38" height="18" rx="9" class="accent" opacity="0.2"/>
+    <text x="169" y="28" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" class="accent">P1</text>
+  </g>
+
+  <!-- Task card 2 -->
+  <g transform="translate(28, 101)">
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-bg"/>
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-border"/>
+    <!-- Checkbox -->
+    <rect x="12" y="17" width="20" height="20" rx="4" class="card-border"/>
+    <!-- Task title -->
+    <text x="42" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" class="fg">Fix header bug</text>
+    <!-- Priority pill -->
+    <rect x="150" y="15" width="38" height="18" rx="9" class="muted" opacity="0.2"/>
+    <text x="169" y="28" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" class="muted">P2</text>
+  </g>
+
+  <!-- Task card 3 (completed) -->
+  <g transform="translate(28, 167)">
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-bg" opacity="0.6"/>
+    <rect x="0" y="0" width="200" height="54" rx="6" class="card-border" opacity="0.5"/>
+    <!-- Checked checkbox -->
+    <rect x="12" y="17" width="20" height="20" rx="4" class="success"/>
+    <path d="M17 27 L20 30 L27 22" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Task title (strikethrough) -->
+    <text x="42" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="13" class="muted" text-decoration="line-through">Setup project</text>
+  </g>
+
+  <!-- Add button -->
+  <g transform="translate(195, 215)">
+    <circle cx="16" cy="16" r="16" class="accent"/>
+    <path d="M16 10 L16 22 M10 16 L22 16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

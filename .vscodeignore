@@ -27,6 +27,7 @@ node_modules/**
 hello.html
 .claude/**
 CLAUDE.md
+scripts/**
 
 # Documentation (keep README and LICENSE)
 docs/**
