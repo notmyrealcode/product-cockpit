@@ -2,7 +2,7 @@
   "name": "shepherd",
   "displayName": "Shepherd",
   "description": "Product copilot for AI coding agents",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "publisher": "JustinEckhouse",
   "author": "Justin Eckhouse",

@@ -34,7 +34,7 @@ import { formatReworkDescription } from './lib/formatReworkDescription';
 
 // Shepherd logo
 import shepherdLogo from './assets/logo.png';
-import type { Task, Feature, Requirement, Project, TaskStatus, FeatureStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal, ThoughtPartnerIntensity } from './types';
+import type { Task, Feature, Requirement, Project, TaskStatus, FeatureStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal, ThoughtPartnerIntensity, ExtensionInfo } from './types';
 
 const PARSER_MODELS = [
   { id: 'haiku', name: 'Haiku', description: 'Fast & cheap' },
@@ -58,6 +58,7 @@ export default function App() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [project, setProject] = useState<Project | null>(null);
+  const [extensionInfo, setExtensionInfo] = useState<ExtensionInfo | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [buildInProgress, setBuildInProgress] = useState(false);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
@@ -182,6 +183,7 @@ export default function App() {
           setFeatures(message.features);
           setRequirements(message.requirements);
           setProject(message.project);
+          setExtensionInfo(message.extensionInfo);
           break;
         case 'projectUpdated':
           setProject(message.project);
@@ -734,6 +736,9 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <img src={shepherdLogo} alt="Shepherd" className="h-5 w-5" />
                 <h3 className="text-sm font-semibold text-neutral-800">Shepherd</h3>
+                {extensionInfo && (
+                  <span className="text-[10px] text-neutral-400 font-medium">v{extensionInfo.version}</span>
+                )}
               </div>
               <button
                 onClick={() => setAboutOpen(false)}

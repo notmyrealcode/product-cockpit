@@ -156,7 +156,7 @@ export function RequirementsInterview({
         </div>
 
         {/* Messages area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px]">
           {/* Initial input phase */}
           {awaitingInput && (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -331,7 +331,8 @@ export function RequirementsInterview({
         <div className="border-t border-neutral-200 p-4">
           {awaitingInput ? (
             /* Initial input */
-            <div className="space-y-4">
+            <div className="space-y-3">
+              <IntensitySelector value={intensity} onChange={setIntensity} />
               <div className="relative">
                 <textarea
                   ref={initialInputRef}
@@ -354,7 +355,6 @@ export function RequirementsInterview({
                   />
                 </div>
               </div>
-              <IntensitySelector value={intensity} onChange={setIntensity} />
               <div className="flex justify-between items-center">
                 <span className="text-xs text-neutral-400">⌘+Enter to start</span>
                 <Button onClick={handleStartInterview} disabled={!initialInput.trim()}>

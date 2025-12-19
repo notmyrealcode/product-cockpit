@@ -4,10 +4,16 @@ import { ProposalReview } from './components/ProposalReview';
 import { vscode } from './lib/vscode';
 import type { InterviewProposal } from './types';
 
+interface ExistingFeatureRef {
+  id: string;
+  title: string;
+}
+
 interface ProposalPanelData {
   proposal: InterviewProposal;
   currentDesignMd: string | null;
   scope: 'project' | 'new-feature' | 'task';
+  existingFeatures: ExistingFeatureRef[];
 }
 
 function ProposalPanel() {
@@ -22,6 +28,7 @@ function ProposalPanel() {
           proposal: message.proposal,
           currentDesignMd: message.currentDesignMd,
           scope: message.scope || 'new-feature',
+          existingFeatures: message.existingFeatures || [],
         });
       }
 
@@ -81,6 +88,7 @@ function ProposalPanel() {
       scope={data.scope}
       proposal={data.proposal}
       currentDesignMd={data.currentDesignMd}
+      existingFeatures={data.existingFeatures}
       onApprove={handleApprove}
       onReject={handleReject}
       onCancel={handleCancel}

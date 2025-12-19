@@ -309,6 +309,19 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private getExtensionInfo(): { version: string; name: string } {
+        try {
+            const packageJsonPath = path.join(this.extensionUri.fsPath, 'package.json');
+            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+            return {
+                version: packageJson.version || '0.0.0',
+                name: packageJson.displayName || packageJson.name || 'Shepherd'
+            };
+        } catch {
+            return { version: '0.0.0', name: 'Shepherd' };
+        }
+    }
+
     private async sendInitialized(): Promise<void> {
         log('sendInitialized called, _view exists: ' + !!this._view);
         if (this._view) {
@@ -317,13 +330,15 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const tasks = this.taskStore.getTasks();
             const requirements = await this.getRequirements();
             const parserModel = vscode.workspace.getConfiguration('shepherd').get<string>('parserModel', 'haiku');
+            const extensionInfo = this.getExtensionInfo();
             log('Sending initialized with ' + tasks.length + ' tasks, ' + features.length + ' features');
             this._view.webview.postMessage({
                 type: 'initialized',
                 project,
                 features,
                 tasks,
-                requirements
+                requirements,
+                extensionInfo
             });
             this._view.webview.postMessage({
                 type: 'settingsLoaded',
@@ -664,13 +679,22 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     continue;
                 }
 
-                const featureId = task.featureIndex !== undefined
-                    ? featureIdMap.get(task.featureIndex)
-                    : undefined;
+                // Determine feature ID: prefer existingFeatureId, then featureIndex mapping
+                let featureId: string | null = null;
+                if (task.existingFeatureId) {
+                    // Validate that the existing feature actually exists
+                    const existingFeature = this.taskStore.getFeature(task.existingFeatureId);
+                    if (existingFeature) {
+                        featureId = task.existingFeatureId;
+                    }
+                } else if (task.featureIndex !== undefined) {
+                    featureId = featureIdMap.get(task.featureIndex) || null;
+                }
+
                 this.taskStore.createTask({
                     title: task.title,
                     description: task.description,
-                    feature_id: featureId || null
+                    feature_id: featureId
                 });
                 taskCount++;
             }
@@ -746,13 +770,24 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             if (project.description) context.projectDescription = project.description;
         }
 
-        // Get existing features
+        // Get existing active features with their todo tasks (exclude done features)
         const features = this.taskStore.getFeatures();
-        if (features.length > 0) {
-            context.existingFeatures = features.map(f => ({
-                title: f.title,
-                description: f.description
-            }));
+        const allTasks = this.taskStore.getTasks();
+        const activeFeatures = features.filter(f => f.status === 'active');
+        if (activeFeatures.length > 0) {
+            context.existingFeatures = activeFeatures.map(f => {
+                // Get todo tasks for this feature
+                const todoTasks = allTasks
+                    .filter(t => t.feature_id === f.id && t.status === 'todo')
+                    .map(t => t.title);
+                return {
+                    id: f.id,
+                    title: f.title,
+                    description: f.description,
+                    status: f.status,
+                    todoTasks
+                };
+            });
         }
 
         // Get existing requirements with summaries from index
@@ -986,11 +1021,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
+        // Get existing features for display in proposal review
+        const existingFeatures = this.taskStore.getFeatures().map(f => ({
+            id: f.id,
+            title: f.title
+        }));
+
         this.proposalPanel.webview.postMessage({
             type: 'proposalData',
             proposal: this.currentProposal,
             currentDesignMd: this.currentDesignMd || null,
-            scope: this.interviewScope || 'new-feature'
+            scope: this.interviewScope || 'new-feature',
+            existingFeatures
         });
     }
 

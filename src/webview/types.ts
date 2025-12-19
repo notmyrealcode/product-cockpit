@@ -52,7 +52,12 @@ export interface InterviewProposal {
   requirementDoc: string;
   requirementPath: string;
   features: { title: string; description: string }[];
-  tasks: { title: string; description: string; featureIndex?: number }[];
+  tasks: {
+    title: string;
+    description: string;
+    featureIndex?: number;        // Index into NEW features array (from this proposal)
+    existingFeatureId?: string;   // ID of existing feature to add task to
+  }[];
   proposedDesignMd?: string;  // Complete proposed design.md content (replaces existing)
 }
 
@@ -61,9 +66,15 @@ export interface InterviewMessage {
   content: string;
 }
 
+// Extension info
+export interface ExtensionInfo {
+  version: string;
+  name: string;
+}
+
 // Messages from extension to webview
 export type ExtensionMessage =
-  | { type: 'initialized'; project: Project | null; features: Feature[]; tasks: Task[]; requirements: Requirement[] }
+  | { type: 'initialized'; project: Project | null; features: Feature[]; tasks: Task[]; requirements: Requirement[]; extensionInfo: ExtensionInfo }
   | { type: 'projectUpdated'; project: Project }
   | { type: 'featuresUpdated'; features: Feature[] }
   | { type: 'tasksUpdated'; tasks: Task[] }

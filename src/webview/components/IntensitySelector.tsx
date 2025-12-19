@@ -38,9 +38,9 @@ const intensityOptions: IntensityOption[] = [
 
 export function IntensitySelector({ value, onChange }: IntensitySelectorProps) {
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-neutral-600">How involved should Shepherd be?</p>
-      <div className="flex gap-3">
+    <div className="space-y-1.5">
+      <p className="text-xs text-neutral-500">How involved should Shepherd be?</p>
+      <div className="flex gap-2">
         {intensityOptions.map((option) => {
           const isSelected = value === option.id;
           return (
@@ -49,8 +49,8 @@ export function IntensitySelector({ value, onChange }: IntensitySelectorProps) {
               type="button"
               onClick={() => onChange(option.id)}
               className={cn(
-                // Base card styles from design guide
-                'flex-1 flex flex-col items-center text-center p-4 rounded-md border transition-fast',
+                // Compact card styles
+                'flex-1 flex flex-col items-center text-center px-2 py-2 rounded-md border transition-fast',
                 // Default state
                 'border-neutral-200 bg-neutral-0',
                 // Hover state
@@ -61,7 +61,7 @@ export function IntensitySelector({ value, onChange }: IntensitySelectorProps) {
             >
               <div
                 className={cn(
-                  'mb-2',
+                  'mb-1',
                   isSelected ? 'text-primary' : 'text-neutral-400'
                 )}
               >
@@ -69,14 +69,11 @@ export function IntensitySelector({ value, onChange }: IntensitySelectorProps) {
               </div>
               <span
                 className={cn(
-                  'text-base font-medium mb-1',
+                  'text-xs font-medium',
                   isSelected ? 'text-primary' : 'text-neutral-800'
                 )}
               >
                 {option.title}
-              </span>
-              <span className="text-sm text-neutral-500 leading-snug">
-                {option.description}
               </span>
             </button>
           );

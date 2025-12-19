@@ -6,10 +6,16 @@ import { DiffView } from './DiffView';
 import { cn } from '../lib/utils';
 import type { InterviewProposal } from '../types';
 
+interface ExistingFeatureRef {
+  id: string;
+  title: string;
+}
+
 interface ProposalReviewProps {
   scope: 'project' | 'new-feature' | 'task';
   proposal: InterviewProposal;
   currentDesignMd: string | null;
+  existingFeatures: ExistingFeatureRef[];
   onApprove: (editedRequirementDoc?: string, editedDesignChanges?: string, removedFeatureIndices?: number[], removedTaskIndices?: number[]) => void;
   onReject: (feedback: string) => void;
   onCancel: () => void;
@@ -19,6 +25,7 @@ export function ProposalReview({
   scope,
   proposal,
   currentDesignMd,
+  existingFeatures,
   onApprove,
   onReject,
   onCancel,
@@ -70,6 +77,24 @@ export function ProposalReview({
 
   const activeFeatures = proposal.features.filter((_, i) => !removedFeatures.has(i));
   const activeTasks = proposal.tasks.filter((_, i) => !removedTasks.has(i));
+  const tasksForExistingFeatures = activeTasks.filter(t => t.existingFeatureId);
+  const newFeatureTasks = activeTasks.filter(t => t.featureIndex !== undefined && !t.existingFeatureId);
+  const standaloneTasks = activeTasks.filter(t => t.featureIndex === undefined && !t.existingFeatureId);
+
+  // Build summary parts
+  const summaryParts: string[] = [];
+  if (activeFeatures.length > 0) {
+    summaryParts.push(`${activeFeatures.length} new feature${activeFeatures.length !== 1 ? 's' : ''}`);
+  }
+  if (tasksForExistingFeatures.length > 0) {
+    summaryParts.push(`${tasksForExistingFeatures.length} task${tasksForExistingFeatures.length !== 1 ? 's' : ''} to existing`);
+  }
+  if (standaloneTasks.length > 0) {
+    summaryParts.push(`${standaloneTasks.length} standalone task${standaloneTasks.length !== 1 ? 's' : ''}`);
+  }
+  if (proposal.proposedDesignMd) {
+    summaryParts.push('design updates');
+  }
 
   return (
     <div className="h-full flex flex-col bg-neutral-0">
@@ -78,8 +103,7 @@ export function ProposalReview({
         <div>
           <h1 className="text-lg font-semibold text-neutral-800">Review Proposal</h1>
           <p className="text-sm text-neutral-500">
-            {activeFeatures.length} features, {activeTasks.length} tasks
-            {proposal.proposedDesignMd && ' + design guide updates'}
+            {summaryParts.length > 0 ? summaryParts.join(', ') : 'No changes'}
           </p>
         </div>
         <button
@@ -233,11 +257,60 @@ export function ProposalReview({
                 );
               })}
 
-              {/* Standalone tasks */}
+              {/* Tasks for existing features */}
+              {(() => {
+                const tasksForExisting = proposal.tasks
+                  .map((t, i) => ({ ...t, originalIndex: i }))
+                  .filter(t => t.existingFeatureId && !removedTasks.has(t.originalIndex));
+                if (tasksForExisting.length === 0) return null;
+
+                // Group by existing feature
+                const grouped = tasksForExisting.reduce((acc, task) => {
+                  const featureId = task.existingFeatureId!;
+                  if (!acc[featureId]) acc[featureId] = [];
+                  acc[featureId].push(task);
+                  return acc;
+                }, {} as Record<string, typeof tasksForExisting>);
+
+                return Object.entries(grouped).map(([featureId, tasks]) => {
+                  const featureTitle = existingFeatures.find(f => f.id === featureId)?.title || 'Unknown Feature';
+                  return (
+                    <div key={featureId} className="bg-neutral-0 rounded-lg border border-success/30 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide bg-success/10 text-success px-2 py-0.5 rounded">
+                          Adding to Existing
+                        </span>
+                        <span className="text-sm font-medium text-neutral-800">{featureTitle}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {tasks.map((task) => (
+                          <div key={task.originalIndex} className="flex items-start gap-2 bg-neutral-50 rounded p-2">
+                            <span className="text-neutral-400 mt-0.5">•</span>
+                            <div className="flex-1">
+                              <span className="text-sm text-neutral-700">{task.title}</span>
+                              {task.description && (
+                                <p className="text-xs text-neutral-500 mt-1">{task.description}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setRemovedTasks(prev => new Set([...prev, task.originalIndex]))}
+                              className="p-1 text-neutral-400 hover:text-danger shrink-0"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+
+              {/* Standalone tasks (no feature association) */}
               {(() => {
                 const standaloneTasks = proposal.tasks
                   .map((t, i) => ({ ...t, originalIndex: i }))
-                  .filter(t => t.featureIndex === undefined && !removedTasks.has(t.originalIndex));
+                  .filter(t => t.featureIndex === undefined && !t.existingFeatureId && !removedTasks.has(t.originalIndex));
                 if (standaloneTasks.length === 0) return null;
 
                 return (

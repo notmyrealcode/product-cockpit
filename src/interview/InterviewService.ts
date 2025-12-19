@@ -17,7 +17,12 @@ export interface InterviewProposal {
     requirementDoc: string;
     requirementPath: string;
     features: { title: string; description: string }[];
-    tasks: { title: string; description: string; featureIndex?: number }[];
+    tasks: {
+        title: string;
+        description: string;
+        featureIndex?: number;        // Index into NEW features array (from this proposal)
+        existingFeatureId?: string;   // ID of existing feature to add task to
+    }[];
     proposedDesignMd?: string;  // Complete proposed design.md content (replaces existing)
 }
 
@@ -38,7 +43,13 @@ export interface InterviewCallbacks {
 export interface InterviewContext {
     projectTitle?: string;
     projectDescription?: string;
-    existingFeatures?: { title: string; description: string | null }[];
+    existingFeatures?: {
+        id: string;  // Feature ID for referencing in proposals
+        title: string;
+        description: string | null;
+        status: 'active' | 'done';
+        todoTasks: string[];  // Just titles of todo tasks
+    }[];
     existingRequirements?: { path: string; title: string; summary: string }[];
     currentDesignMd?: string;  // Empty string means file doesn't exist yet
 }
@@ -127,13 +138,18 @@ export class InterviewService {
             sections.push(projectInfo);
         }
 
-        // Existing features
+        // Existing features with status and planned tasks
         if (context.existingFeatures && context.existingFeatures.length > 0) {
-            let featuresInfo = '## Existing Features';
+            let featuresInfo = '## Existing Features\nConsider adding tasks to existing active features using their ID in existingFeatureId:';
             for (const feat of context.existingFeatures) {
-                featuresInfo += `\n- ${feat.title}`;
+                const statusLabel = feat.status === 'done' ? ' [DONE]' : '';
+                featuresInfo += `\n- **${feat.title}** (id: ${feat.id})${statusLabel}`;
                 if (feat.description) {
                     featuresInfo += `: ${feat.description}`;
+                }
+                // Show planned (todo) tasks for active features
+                if (feat.status === 'active' && feat.todoTasks.length > 0) {
+                    featuresInfo += `\n  Planned tasks: ${feat.todoTasks.join(', ')}`;
                 }
             }
             sections.push(featuresInfo);
