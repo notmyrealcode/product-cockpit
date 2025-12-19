@@ -114,27 +114,25 @@ export function RecordButton({ onTranscript, className, size = 'sm', rawMode = f
   const iconSize = size === 'sm' ? 14 : 16;
   const buttonSize = size === 'sm' ? 'h-9' : 'h-10';
 
-  // When recording, show timer alongside stop button
+  // When recording, show compact timer inside stop button
   if (isRecording) {
     return (
-      <div className={cn('flex items-center gap-2', className)}>
-        <span className="text-xs font-mono text-danger tabular-nums">
-          {formatTime(elapsedSeconds)} / {formatTime(MAX_RECORDING_SECONDS)}
+      <button
+        type="button"
+        onClick={handleClick}
+        className={cn(
+          'flex items-center justify-center gap-1.5 rounded transition-colors shrink-0',
+          buttonSize,
+          'px-2 bg-danger text-neutral-0 hover:bg-danger/90',
+          className
+        )}
+        title="Stop recording"
+      >
+        <Square size={iconSize} />
+        <span className="text-xs font-mono tabular-nums">
+          {formatTime(elapsedSeconds)}
         </span>
-        <button
-          type="button"
-          onClick={handleClick}
-          className={cn(
-            'flex items-center justify-center rounded transition-colors',
-            buttonSize,
-            size === 'sm' ? 'w-9' : 'w-10',
-            'bg-danger text-neutral-0 hover:bg-danger/90'
-          )}
-          title="Stop recording"
-        >
-          <Square size={iconSize} />
-        </button>
-      </div>
+      </button>
     );
   }
 
