@@ -2,7 +2,7 @@
 
 All notable changes to Shepherd will be documented in this file.
 
-## [Unreleased]
+## [0.0.6] - 2025-12-19
 
 ### Added
 
