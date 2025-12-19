@@ -182,6 +182,7 @@
     "compile": "tsc --noEmit && node esbuild.js",
     "compile:prod": "tsc --noEmit && node esbuild.js --production",
     "watch": "concurrently \"tsc --noEmit -watch -p ./\" \"node esbuild.js --watch\"",
+    "package": "npx @vscode/vsce package --allow-missing-repository",
     "lint": "eslint src --ext ts",
     "test": "vitest run",
     "test:watch": "vitest",

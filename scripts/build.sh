@@ -97,7 +97,7 @@ fi
 if [ "$DO_BUILD" = true ]; then
     echo ""
     echo -e "${BLUE}Packaging extension (includes compilation)...${NC}"
-    npx @vscode/vsce package --no-dependencies
+    npx @vscode/vsce package --no-dependencies --allow-missing-repository
 
     echo ""
     echo -e "${GREEN}Package created:${NC}"
@@ -108,7 +108,7 @@ fi
 if [ "$DO_PUBLISH" = true ]; then
     echo ""
     echo -e "${BLUE}Publishing to VS Code Marketplace...${NC}"
-    npx @vscode/vsce publish --no-dependencies $PRE_RELEASE
+    npx @vscode/vsce publish --no-dependencies --allow-missing-repository $PRE_RELEASE
 
     echo ""
     echo -e "${GREEN}Published successfully!${NC}"

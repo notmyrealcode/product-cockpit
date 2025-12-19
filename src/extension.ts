@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { TaskStore } from './tasks/TaskStore';
@@ -13,18 +15,48 @@ let taskStore: TaskStore | undefined;
 let webviewProvider: TaskWebviewProvider | undefined;
 let httpBridge: HttpBridge | undefined;
 
+/**
+ * Detects if the extension is running in its own source code folder.
+ * This happens when the installed extension activates in the development workspace.
+ */
+function isOwnSourceFolder(workspaceRoot: string): boolean {
+    try {
+        const packageJsonPath = path.join(workspaceRoot, 'package.json');
+        const extensionTsPath = path.join(workspaceRoot, 'src', 'extension.ts');
+
+        if (!fs.existsSync(packageJsonPath) || !fs.existsSync(extensionTsPath)) {
+            return false;
+        }
+
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        return packageJson.name === 'shepherd' && packageJson.publisher === 'JustinEckhouse';
+    } catch {
+        return false;
+    }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
+    // Get dynamic extension ID (works in both dev and installed modes)
+    const extensionId = context.extension.id;
+    const walkthroughId = `${extensionId}#shepherd.welcome`;
+
     // Register command to open walkthrough (always available, even without workspace)
     context.subscriptions.push(
-        vscode.commands.registerCommand('shepherd.openWalkthrough', () => {
-            console.log('[Shepherd] openWalkthrough command called');
-            vscode.commands.executeCommand(
-                'workbench.action.openWalkthrough',
-                'JustinEckhouse.shepherd#shepherd.welcome',
-                false
-            );
+        vscode.commands.registerCommand('shepherd.openWalkthrough', async () => {
+            try {
+                await vscode.commands.executeCommand(
+                    'workbench.action.openWalkthrough',
+                    walkthroughId,
+                    false
+                );
+            } catch (error) {
+                console.error('[Shepherd] Failed to open walkthrough:', error);
+                vscode.window.showErrorMessage(
+                    'Failed to open walkthrough. Try running "Shepherd: Initialize" from the command palette.'
+                );
+            }
         })
     );
 
@@ -36,6 +68,11 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
         return;
+    }
+
+    // Check if running in own source folder (installed extension in dev workspace)
+    if (isOwnSourceFolder(workspaceRoot)) {
+        console.log('[Shepherd] Detected own source folder - extension works normally here');
     }
 
     // Reset walkthrough contexts on startup (VS Code persists them between sessions)
@@ -50,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
             const success = await initialize(workspaceRoot);
             console.log('[Shepherd] Initialize result:', success);
             if (success) {
-                await activateExtension(context, workspaceRoot);
+                await activateExtension(context, workspaceRoot, walkthroughId);
                 console.log('[Shepherd] activateExtension complete');
 
                 // Set walkthrough-specific context to mark step 1 complete
@@ -61,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 setTimeout(() => {
                     vscode.commands.executeCommand(
                         'workbench.action.openWalkthrough',
-                        'JustinEckhouse.shepherd#shepherd.welcome',
+                        walkthroughId,
                         false
                     );
                 }, 300);
@@ -92,7 +129,7 @@ export async function activate(context: vscode.ExtensionContext) {
             setTimeout(() => {
                 vscode.commands.executeCommand(
                     'workbench.action.openWalkthrough',
-                    'JustinEckhouse.shepherd#shepherd.welcome',
+                    walkthroughId,
                     false
                 );
             }, 300);
@@ -108,18 +145,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Check if already initialized
     if (isInitialized(workspaceRoot)) {
-        await activateExtension(context, workspaceRoot);
+        await activateExtension(context, workspaceRoot, walkthroughId);
     } else {
         // Open walkthrough for new users
         vscode.commands.executeCommand(
             'workbench.action.openWalkthrough',
-            'JustinEckhouse.shepherd#shepherd.welcome',
+            walkthroughId,
             false
         );
     }
 }
 
-async function activateExtension(context: vscode.ExtensionContext, workspaceRoot: string): Promise<void> {
+async function activateExtension(context: vscode.ExtensionContext, workspaceRoot: string, walkthroughId?: string): Promise<void> {
     // Set context for UI visibility
     console.log('[Shepherd] Setting context shepherd.initialized = true');
     await vscode.commands.executeCommand('setContext', 'shepherd.initialized', true);
@@ -154,7 +191,7 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
     await httpBridge.start();
 
     // Initialize Webview Provider
-    webviewProvider = new TaskWebviewProvider(context.extensionUri, taskStore, workspaceRoot);
+    webviewProvider = new TaskWebviewProvider(context.extensionUri, taskStore, workspaceRoot, walkthroughId);
 
     // Register webview provider and cleanup
     context.subscriptions.push(

@@ -54,12 +54,15 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private interviewScope?: InterviewScope;
     private recordingRawMode = false;
     private proposalPanel?: vscode.WebviewPanel;
+    private readonly walkthroughId: string;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly taskStore: TaskStore,
-        private readonly workspaceRoot: string
+        private readonly workspaceRoot: string,
+        walkthroughId?: string
     ) {
+        this.walkthroughId = walkthroughId || 'JustinEckhouse.shepherd#shepherd.welcome';
         log('WebviewProvider constructor called');
 
         this.requirementsDir = path.join(workspaceRoot, 'docs', 'requirements');
@@ -872,7 +875,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             setTimeout(() => {
                 vscode.commands.executeCommand(
                     'workbench.action.openWalkthrough',
-                    'JustinEckhouse.shepherd#shepherd.welcome',
+                    this.walkthroughId,
                     false
                 );
             }, 300);
