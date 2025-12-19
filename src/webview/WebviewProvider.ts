@@ -50,8 +50,10 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
     private buildTaskIds?: Set<string>;
     private buildStatusListener?: vscode.Disposable;
     private currentProposal?: InterviewProposal;
+    private currentDesignMd?: string;
     private interviewScope?: InterviewScope;
     private recordingRawMode = false;
+    private proposalPanel?: vscode.WebviewPanel;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -264,8 +266,11 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'downloadModel':
                         await this.handleDownloadModel();
                         break;
-                    case 'openTestPanel':
-                        this.openTestPanel();
+                    case 'openProposalPanel':
+                        this.openProposalPanel();
+                        break;
+                    case 'cancelProposal':
+                        this.handleCancelProposal();
                         break;
                     case 'buildTasks':
                         await this.handleBuildTasks(message.taskIds);
@@ -478,23 +483,28 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                 },
                 onProposal: async (proposal: InterviewProposal) => {
                     this.currentProposal = proposal;
-                    if (this._view) {
-                        // Read current design.md for diff view
-                        let currentDesignMd: string | undefined;
-                        if (proposal.proposedDesignMd) {
-                            const designPath = path.join(this.workspaceRoot, 'docs', 'requirements', 'design.md');
-                            try {
-                                currentDesignMd = await fs.promises.readFile(designPath, 'utf-8');
-                            } catch {
-                                // File doesn't exist yet
-                            }
+
+                    // Read current design.md for diff view
+                    if (proposal.proposedDesignMd) {
+                        const designPath = path.join(this.workspaceRoot, 'docs', 'requirements', 'design.md');
+                        try {
+                            this.currentDesignMd = await fs.promises.readFile(designPath, 'utf-8');
+                        } catch {
+                            this.currentDesignMd = undefined;
                         }
+                    }
+
+                    // Notify sidebar that proposal is being reviewed in panel
+                    if (this._view) {
                         this._view.webview.postMessage({
                             type: 'interviewProposal',
                             proposal,
-                            currentDesignMd
+                            currentDesignMd: this.currentDesignMd
                         });
                     }
+
+                    // Auto-open the proposal panel in editor area
+                    this.openProposalPanel();
                 },
                 onComplete: (requirementPath: string) => {
                     if (this._view) {
@@ -695,6 +705,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private handleCancelProposal(): void {
+        // Close the panel and notify sidebar
+        this.proposalPanel?.dispose();
+        this.proposalPanel = undefined;
+        this.currentProposal = undefined;
+        this.currentDesignMd = undefined;
+
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'interviewCancelled' });
+        }
+    }
+
     private async gatherInterviewContext(): Promise<InterviewContext> {
         const context: InterviewContext = {};
 
@@ -870,53 +892,113 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private openTestPanel(): void {
-        const panel = vscode.window.createWebviewPanel(
+    private openProposalPanel(): void {
+        // Reveal existing panel if we have one
+        if (this.proposalPanel) {
+            this.proposalPanel.reveal(vscode.ViewColumn.One);
+            this.sendProposalDataToPanel();
+            return;
+        }
+
+        // Create new panel
+        this.proposalPanel = vscode.window.createWebviewPanel(
             'shepherd.proposalView',
-            'Proposal Review',
+            'Review Proposal',
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [this.extensionUri]
+                localResourceRoots: [
+                    vscode.Uri.joinPath(this.extensionUri, 'out', 'webview')
+                ],
+                retainContextWhenHidden: true
             }
         );
 
-        // Simple test HTML for now
-        panel.webview.html = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {
-                        font-family: var(--vscode-font-family);
-                        padding: 20px;
-                        color: var(--vscode-foreground);
-                        background: var(--vscode-editor-background);
+        // Set HTML content
+        this.proposalPanel.webview.html = this.getProposalPanelHtml(this.proposalPanel.webview);
+
+        // Handle messages from panel
+        this.proposalPanel.webview.onDidReceiveMessage(async (message) => {
+            log('Panel message: ' + message.type);
+            switch (message.type) {
+                case 'requestProposalData':
+                    this.sendProposalDataToPanel();
+                    break;
+                case 'approveProposal':
+                    await this.handleApproveProposal(
+                        message.editedRequirementDoc,
+                        message.editedDesignChanges,
+                        message.removedFeatureIndices,
+                        message.removedTaskIndices
+                    );
+                    // Close panel after successful approval
+                    this.proposalPanel?.dispose();
+                    this.proposalPanel = undefined;
+                    break;
+                case 'rejectProposal':
+                    this.interviewService.rejectProposal(message.feedback);
+                    // Clear proposal and notify sidebar to continue interview
+                    this.currentProposal = undefined;
+                    this.currentDesignMd = undefined;
+                    if (this._view) {
+                        this._view.webview.postMessage({ type: 'proposalRejected' });
                     }
-                    h1 { color: var(--vscode-textLink-foreground); }
-                    .card {
-                        background: var(--vscode-editor-inactiveSelectionBackground);
-                        border-radius: 8px;
-                        padding: 16px;
-                        margin: 16px 0;
-                    }
-                </style>
-            </head>
-            <body>
-                <h1>🎉 Proposal Review Panel</h1>
-                <p>This panel opened from the sidebar webview!</p>
-                <div class="card">
-                    <h3>Test Content</h3>
-                    <p>This is where the full proposal review UI would go.</p>
-                    <ul>
-                        <li>Design Guide diff view</li>
-                        <li>Features & Tasks list</li>
-                        <li>Accept / Modify controls</li>
-                    </ul>
-                </div>
-            </body>
-            </html>
-        `;
+                    // Close panel
+                    this.proposalPanel?.dispose();
+                    this.proposalPanel = undefined;
+                    break;
+                case 'cancelProposal':
+                    this.handleCancelProposal();
+                    break;
+            }
+        });
+
+        // Clean up reference when panel is closed
+        this.proposalPanel.onDidDispose(() => {
+            this.proposalPanel = undefined;
+        });
+
+        // Send initial data
+        this.sendProposalDataToPanel();
+    }
+
+    private sendProposalDataToPanel(): void {
+        if (!this.proposalPanel || !this.currentProposal) {
+            return;
+        }
+
+        this.proposalPanel.webview.postMessage({
+            type: 'proposalData',
+            proposal: this.currentProposal,
+            currentDesignMd: this.currentDesignMd || null,
+            scope: this.interviewScope || 'new-feature'
+        });
+    }
+
+    private getProposalPanelHtml(webview: vscode.Webview): string {
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'webview', 'proposal-panel.js')
+        );
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'webview', 'webview.css')
+        );
+
+        const nonce = getNonce();
+
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:; media-src blob:;">
+    <link href="${styleUri}" rel="stylesheet">
+    <title>Review Proposal</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
     }
 
     private buildInProgress = false;

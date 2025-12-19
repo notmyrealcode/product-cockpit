@@ -491,11 +491,15 @@ export class WhisperService {
     }
 
     private async downloadModel(model: WhisperModel): Promise<boolean> {
+        console.log('[WhisperService] downloadModel - model:', model.id);
+        console.log('[WhisperService] downloadModel - modelsDir:', this.modelsDir);
         await fs.promises.mkdir(this.modelsDir, { recursive: true });
 
         const modelPath = path.join(this.modelsDir, `ggml-${model.id}.bin`);
+        console.log('[WhisperService] downloadModel - modelPath:', modelPath);
 
         if (fs.existsSync(modelPath)) {
+            console.log('[WhisperService] downloadModel - model already exists');
             await this.saveConfig({ selectedModel: model.id });
             return true;
         }
@@ -525,15 +529,35 @@ export class WhisperService {
 
     async getModelPath(): Promise<string | null> {
         const config = await this.loadConfig();
-        if (!config?.selectedModel) {
-            return null;
+        console.log('[WhisperService] getModelPath - config:', config);
+        console.log('[WhisperService] getModelPath - configPath:', this.configPath);
+        console.log('[WhisperService] getModelPath - modelsDir:', this.modelsDir);
+
+        // First check if config has a selected model
+        if (config?.selectedModel) {
+            const modelPath = path.join(this.modelsDir, `ggml-${config.selectedModel}.bin`);
+            console.log('[WhisperService] getModelPath - checking configured:', modelPath);
+            if (fs.existsSync(modelPath)) {
+                console.log('[WhisperService] getModelPath - found configured model');
+                return modelPath;
+            }
         }
 
-        const modelPath = path.join(this.modelsDir, `ggml-${config.selectedModel}.bin`);
-        if (fs.existsSync(modelPath)) {
-            return modelPath;
+        // Auto-detect: check if any model exists in shared directory
+        // This handles the case where model was downloaded in another workspace
+        console.log('[WhisperService] getModelPath - auto-detecting models...');
+        const modelPriority = ['base', 'small', 'tiny', 'medium'];  // Prefer balanced models
+        for (const modelId of modelPriority) {
+            const modelPath = path.join(this.modelsDir, `ggml-${modelId}.bin`);
+            if (fs.existsSync(modelPath)) {
+                console.log('[WhisperService] getModelPath - auto-detected:', modelId);
+                // Save config so we don't have to auto-detect next time
+                await this.saveConfig({ selectedModel: modelId });
+                return modelPath;
+            }
         }
 
+        console.log('[WhisperService] getModelPath - no model found');
         return null;
     }
 
@@ -623,9 +647,12 @@ export class WhisperService {
     }
 
     private async saveConfig(config: { selectedModel: string }): Promise<void> {
+        console.log('[WhisperService] saveConfig - saving:', config);
+        console.log('[WhisperService] saveConfig - to path:', this.configPath);
         const dir = path.dirname(this.configPath);
         await fs.promises.mkdir(dir, { recursive: true });
         await fs.promises.writeFile(this.configPath, JSON.stringify(config, null, 2));
+        console.log('[WhisperService] saveConfig - saved successfully');
     }
 
     private downloadFile(

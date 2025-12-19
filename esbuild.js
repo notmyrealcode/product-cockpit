@@ -39,7 +39,7 @@ async function buildExtension() {
   }
 }
 
-// Build React webview
+// Build React webview (sidebar)
 async function buildWebview() {
   const ctx = await esbuild.context({
     entryPoints: ['src/webview/index.tsx'],
@@ -70,6 +70,36 @@ async function buildWebview() {
   }
 }
 
+// Build proposal panel webview (editor area)
+async function buildProposalPanel() {
+  const ctx = await esbuild.context({
+    entryPoints: ['src/webview/proposal-panel.tsx'],
+    bundle: true,
+    outfile: 'out/webview/proposal-panel.js',
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2020',
+    minify: production,
+    sourcemap: !production,
+    define: {
+      'process.env.NODE_ENV': production ? '"production"' : '"development"',
+    },
+    external: ['*.css'],
+    loader: {
+      '.css': 'empty',
+      '.png': 'dataurl',
+    },
+  });
+
+  if (watch) {
+    await ctx.watch();
+    console.log('Watching proposal panel...');
+  } else {
+    await ctx.rebuild();
+    await ctx.dispose();
+  }
+}
+
 // Copy sql.js WASM file to output
 function copySqlJsWasm() {
   const wasmSource = path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
@@ -85,6 +115,7 @@ async function main() {
   buildTailwind();
   await buildExtension();
   await buildWebview();
+  await buildProposalPanel();
   copySqlJsWasm();
 }
 

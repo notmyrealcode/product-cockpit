@@ -28,7 +28,7 @@ import { RecordButton } from './components/RecordButton';
 import { Toast, ToastType } from './components/Toast';
 import { VoiceSetupModal } from './components/VoiceSetupModal';
 import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings, Info, ExternalLink } from 'lucide-react';
+import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
 
 // Shepherd logo
 import shepherdLogo from './assets/logo.png';
@@ -240,6 +240,12 @@ export default function App() {
           setCurrentDesignMd(null);
           setInterviewThinking(false);
           setInterviewError(null);
+          break;
+        case 'proposalRejected':
+          // Clear proposal so interview can continue with Q&A
+          setCurrentProposal(null);
+          setCurrentDesignMd(null);
+          setInterviewThinking(true);  // Claude is processing the feedback
           break;
         case 'interviewError':
           setInterviewError(message.error);
@@ -538,13 +544,6 @@ export default function App() {
             <h1 className="text-xl font-semibold text-neutral-800">Shepherd</h1>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => vscode.postMessage({ type: 'openTestPanel' })}
-              className="p-1.5 text-neutral-400 hover:text-primary hover:bg-primary/10 rounded"
-              title="Test Panel (dev)"
-            >
-              <ExternalLink size={16} />
-            </button>
             <button
               onClick={() => setAboutOpen(!aboutOpen)}
               className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
@@ -968,14 +967,11 @@ export default function App() {
           messages={interviewMessages}
           currentQuestion={currentQuestion}
           proposal={currentProposal}
-          currentDesignMd={currentDesignMd}
           isThinking={interviewThinking}
           error={interviewError}
           awaitingInput={interviewAwaitingInput}
           onStart={handleStartInterview}
           onAnswer={handleInterviewAnswer}
-          onApprove={handleInterviewApprove}
-          onReject={handleInterviewReject}
           onCancel={handleInterviewCancel}
         />
       )}

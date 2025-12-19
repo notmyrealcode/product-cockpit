@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Check, RefreshCw, Loader2, FileText, ListTodo, Flame, Smile, Palette, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Send, Loader2, Flame, Smile, ExternalLink } from 'lucide-react';
 import { Button } from './ui';
 import { RecordButton } from './RecordButton';
-import { DiffView } from './DiffView';
 import { cn } from '../lib/utils';
+import { vscode } from '../lib/vscode';
 import type { InterviewQuestion, InterviewProposal, InterviewMessage } from '../types';
 import { getWaitingContent, preloadHNStories, type WaitingContent } from '../lib/waitingContent';
 
@@ -11,15 +11,12 @@ interface RequirementsInterviewProps {
   scope: 'project' | 'new-feature' | 'task';
   messages: InterviewMessage[];
   currentQuestion: InterviewQuestion | null;
-  proposal: InterviewProposal | null;
-  currentDesignMd: string | null;  // Current content of design.md for diff view
+  proposal: InterviewProposal | null;  // When present, review happens in editor panel
   isThinking: boolean;
   error: string | null;
   awaitingInput?: boolean;  // Show initial input before starting
   onStart: (initialInput: string) => void;  // Start with user's initial input
   onAnswer: (questionId: string, answer: string) => void;
-  onApprove: (editedRequirementDoc?: string, editedDesignChanges?: string, removedFeatureIndices?: number[], removedTaskIndices?: number[]) => void;
-  onReject: (feedback: string) => void;
   onCancel: () => void;
 }
 
@@ -28,14 +25,11 @@ export function RequirementsInterview({
   messages,
   currentQuestion,
   proposal,
-  currentDesignMd,
   isThinking,
   error,
   awaitingInput = false,
   onStart,
   onAnswer,
-  onApprove,
-  onReject,
   onCancel,
 }: RequirementsInterviewProps) {
   const [initialInput, setInitialInput] = useState('');
@@ -43,44 +37,7 @@ export function RequirementsInterview({
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [otherAnswer, setOtherAnswer] = useState('');
-  const [rejectFeedback, setRejectFeedback] = useState('');
-  const [showRejectInput, setShowRejectInput] = useState(false);
-  const [editedRequirementDoc, setEditedRequirementDoc] = useState<string | null>(null);
-  const [lastProposalDoc, setLastProposalDoc] = useState<string | null>(null);
   const [waitingContent, setWaitingContent] = useState<WaitingContent | null>(null);
-
-  // Proposed design.md state
-  const [editedProposedDesign, setEditedProposedDesign] = useState<string | null>(null);
-  const [lastProposedDesign, setLastProposedDesign] = useState<string | null>(null);
-  const [showDiffView, setShowDiffView] = useState(true);  // Toggle between diff and edit
-
-  // Removed items state
-  const [removedFeatures, setRemovedFeatures] = useState<Set<number>>(new Set());
-  const [removedTasks, setRemovedTasks] = useState<Set<number>>(new Set());
-
-  // Expanded descriptions state
-  const [expandedFeatures, setExpandedFeatures] = useState<Set<number>>(new Set());
-  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
-
-  // Update edited doc when proposal changes (new proposal or revised after feedback)
-  useEffect(() => {
-    if (proposal?.requirementDoc && proposal.requirementDoc !== lastProposalDoc) {
-      setEditedRequirementDoc(proposal.requirementDoc);
-      setLastProposalDoc(proposal.requirementDoc);
-    }
-  }, [proposal, lastProposalDoc]);
-
-  // Update proposed design when proposal changes
-  useEffect(() => {
-    if (proposal?.proposedDesignMd !== undefined && proposal.proposedDesignMd !== lastProposedDesign) {
-      setEditedProposedDesign(proposal.proposedDesignMd || null);
-      setLastProposedDesign(proposal.proposedDesignMd || null);
-      setShowDiffView(true);  // Default to diff view for new proposals
-      // Reset removed items when proposal changes
-      setRemovedFeatures(new Set());
-      setRemovedTasks(new Set());
-    }
-  }, [proposal, lastProposedDesign]);
 
   // Preload HN stories on mount
   useEffect(() => {
@@ -148,14 +105,8 @@ export function RequirementsInterview({
     }
   };
 
-  const handleReject = () => {
-    if (showRejectInput) {
-      onReject(rejectFeedback.trim());
-      setRejectFeedback('');
-      setShowRejectInput(false);
-    } else {
-      setShowRejectInput(true);
-    }
+  const handleOpenPanel = () => {
+    vscode.postMessage({ type: 'openProposalPanel' });
   };
 
   const handleStartInterview = () => {
@@ -344,257 +295,23 @@ export function RequirementsInterview({
             </div>
           )}
 
-          {/* Proposal review */}
+          {/* Proposal status - review happens in editor panel */}
           {proposal && (
-            <div className="space-y-4">
-              {/* Requirements document - only for project/feature scope */}
-              {scope !== 'task' && (
-                <div className="bg-success/5 border border-success/20 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-success mb-3">
-                    <FileText size={16} />
-                    <span className="text-sm font-medium">Requirements Document</span>
-                    <span className="text-xs text-neutral-400">(editable)</span>
-                  </div>
-                  <textarea
-                    value={editedRequirementDoc || ''}
-                    onChange={(e) => setEditedRequirementDoc(e.target.value)}
-                    rows={10}
-                    className="w-full text-xs text-neutral-800 font-mono bg-neutral-0 rounded border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-                  />
-                  <p className="text-xs text-neutral-500 mt-2">
-                    Will be saved to: <code className="bg-neutral-100 px-1 rounded">{proposal.requirementPath}</code>
-                  </p>
-                </div>
-              )}
-
-              {/* Design.md changes - only show if there are design changes */}
-              {proposal.proposedDesignMd && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  {/* Header row */}
-                  <div className="flex items-center gap-2 text-purple-700 mb-1">
-                    <Palette size={14} className="shrink-0" />
-                    <span className="text-sm font-medium truncate">Design Guide</span>
-                  </div>
-                  {/* Toggle buttons */}
-                  <div className="flex gap-1 mb-3">
-                    <button
-                      onClick={() => setShowDiffView(true)}
-                      className={cn(
-                        'px-2 py-1 text-xs rounded transition-colors',
-                        showDiffView
-                          ? 'bg-purple-200 text-purple-800'
-                          : 'text-purple-600 hover:bg-purple-100'
-                      )}
-                    >
-                      Diff
-                    </button>
-                    <button
-                      onClick={() => setShowDiffView(false)}
-                      className={cn(
-                        'px-2 py-1 text-xs rounded transition-colors',
-                        !showDiffView
-                          ? 'bg-purple-200 text-purple-800'
-                          : 'text-purple-600 hover:bg-purple-100'
-                      )}
-                    >
-                      Edit
-                    </button>
-                  </div>
-
-                  {showDiffView ? (
-                    /* Diff view */
-                    <DiffView
-                      oldText={currentDesignMd || ''}
-                      newText={editedProposedDesign || ''}
-                    />
-                  ) : (
-                    /* Edit view */
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1.5">
-                        Proposed design.md (full content)
-                      </p>
-                      <textarea
-                        value={editedProposedDesign || ''}
-                        onChange={(e) => setEditedProposedDesign(e.target.value)}
-                        rows={12}
-                        className="w-full text-xs text-neutral-800 font-mono bg-neutral-0 rounded border border-purple-300 p-3 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y"
-                      />
-                      <p className="text-[10px] text-neutral-400 mt-1">
-                        This will completely replace the current design.md file
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Features with tasks */}
-              {proposal.features.length > 0 && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-primary mb-2">
-                    <ListTodo size={14} />
-                    <span className="text-xs font-medium">
-                      {proposal.features.filter((_, i) => !removedFeatures.has(i)).length} Features, {proposal.tasks.filter((_, i) => !removedTasks.has(i)).length} Tasks
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {proposal.features.map((feature, idx) => {
-                      if (removedFeatures.has(idx)) return null;
-                      const isExpanded = expandedFeatures.has(idx);
-                      const featureTasks = proposal.tasks
-                        .map((t, i) => ({ ...t, originalIndex: i }))
-                        .filter(t => t.featureIndex === idx && !removedTasks.has(t.originalIndex));
-
-                      return (
-                        <div key={idx} className="bg-neutral-0 rounded border border-neutral-200 p-2">
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-neutral-800 break-words">{feature.title}</p>
-                            </div>
-                            <button
-                              onClick={() => setRemovedFeatures(prev => new Set([...prev, idx]))}
-                              className="p-1 text-neutral-300 hover:text-danger shrink-0"
-                              title="Remove"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-
-                          {/* Tasks for this feature - compact list */}
-                          {featureTasks.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
-                              {featureTasks.map((task) => (
-                                <div key={task.originalIndex} className="flex items-start gap-1 text-[11px] text-neutral-600">
-                                  <span className="text-neutral-400">•</span>
-                                  <span className="flex-1 min-w-0 break-words">{task.title}</span>
-                                  <button
-                                    onClick={() => setRemovedTasks(prev => new Set([...prev, task.originalIndex]))}
-                                    className="p-0.5 text-neutral-300 hover:text-danger shrink-0"
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Standalone tasks within feature view */}
-                    {(() => {
-                      const standaloneTasks = proposal.tasks
-                        .map((t, i) => ({ ...t, originalIndex: i }))
-                        .filter(t => t.featureIndex === undefined && !removedTasks.has(t.originalIndex));
-                      if (standaloneTasks.length === 0) return null;
-
-                      return (
-                        <div className="bg-neutral-0 rounded border border-neutral-200 p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400 mb-2">Standalone Tasks</p>
-                          <div className="space-y-1.5">
-                            {standaloneTasks.map((task) => {
-                              const taskExpanded = expandedTasks.has(task.originalIndex);
-                              return (
-                                <div key={task.originalIndex} className="flex items-start gap-2 text-xs text-neutral-600 bg-neutral-50 rounded px-2 py-1.5">
-                                  <span className="text-[9px] font-medium uppercase bg-neutral-200 text-neutral-500 px-1 py-0.5 rounded mt-0.5 shrink-0">
-                                    Task
-                                  </span>
-                                  <div className="flex-1 min-w-0">
-                                    <span>{task.title}</span>
-                                    {task.description && (
-                                      <div>
-                                        <button
-                                          onClick={() => {
-                                            const next = new Set(expandedTasks);
-                                            if (taskExpanded) next.delete(task.originalIndex);
-                                            else next.add(task.originalIndex);
-                                            setExpandedTasks(next);
-                                          }}
-                                          className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600 mt-0.5"
-                                        >
-                                          {taskExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                                          {taskExpanded ? 'Hide' : 'Details'}
-                                        </button>
-                                        {taskExpanded && (
-                                          <p className="text-neutral-500 mt-1 whitespace-pre-wrap">{task.description}</p>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => setRemovedTasks(prev => new Set([...prev, task.originalIndex]))}
-                                    className="p-0.5 text-neutral-300 hover:text-danger shrink-0"
-                                    title="Remove task"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              {/* Tasks only (for task scope with no features) */}
-              {proposal.features.length === 0 && proposal.tasks.length > 0 && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-primary mb-3">
-                    <ListTodo size={16} />
-                    <span className="text-sm font-medium">
-                      {proposal.tasks.filter((_, i) => !removedTasks.has(i)).length} Task{proposal.tasks.filter((_, i) => !removedTasks.has(i)).length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {proposal.tasks.map((task, idx) => {
-                      if (removedTasks.has(idx)) return null;
-                      const isExpanded = expandedTasks.has(idx);
-                      return (
-                        <div key={idx} className="bg-neutral-0 rounded border border-neutral-200 p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide bg-neutral-200 text-neutral-500 px-1.5 py-0.5 rounded">
-                                  Task
-                                </span>
-                              </div>
-                              <p className="text-sm font-medium text-neutral-800">{task.title}</p>
-                              {task.description && (
-                                <div className="mt-1">
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(expandedTasks);
-                                      if (isExpanded) next.delete(idx);
-                                      else next.add(idx);
-                                      setExpandedTasks(next);
-                                    }}
-                                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600"
-                                  >
-                                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                    {isExpanded ? 'Hide details' : 'Show details'}
-                                  </button>
-                                  {isExpanded && (
-                                    <p className="text-xs text-neutral-500 mt-1 whitespace-pre-wrap">{task.description}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => setRemovedTasks(prev => new Set([...prev, idx]))}
-                              className="p-1 text-neutral-300 hover:text-danger hover:bg-danger/10 rounded"
-                              title="Remove task"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <ExternalLink size={24} className="text-primary" />
+              </div>
+              <h3 className="text-sm font-medium text-neutral-800 mb-1">
+                Proposal Ready
+              </h3>
+              <p className="text-xs text-neutral-500 mb-4">
+                {proposal.features.length} feature{proposal.features.length !== 1 ? 's' : ''}, {proposal.tasks.length} task{proposal.tasks.length !== 1 ? 's' : ''}
+                {proposal.proposedDesignMd && ' + design updates'}
+              </p>
+              <Button variant="secondary" size="sm" onClick={handleOpenPanel} className="gap-2">
+                <ExternalLink size={14} />
+                Open Review Panel
+              </Button>
             </div>
           )}
 
@@ -644,54 +361,9 @@ export function RequirementsInterview({
               </div>
             </div>
           ) : proposal ? (
-            /* Proposal actions */
-            <div className="space-y-3">
-              {showRejectInput ? (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={rejectFeedback}
-                    onChange={(e) => setRejectFeedback(e.target.value)}
-                    placeholder="What would you like to change?"
-                    className="flex-1 text-sm text-neutral-800 bg-neutral-0 border border-neutral-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleReject();
-                      if (e.key === 'Escape') setShowRejectInput(false);
-                    }}
-                  />
-                  <RecordButton
-                    rawMode
-                    size="sm"
-                    onTranscript={(text) => setRejectFeedback(prev => prev ? `${prev} ${text}` : text)}
-                  />
-                  <Button size="sm" onClick={handleReject}>
-                    Send
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowRejectInput(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => onApprove(
-                      editedRequirementDoc || undefined,
-                      editedProposedDesign || undefined,
-                      removedFeatures.size > 0 ? Array.from(removedFeatures) : undefined,
-                      removedTasks.size > 0 ? Array.from(removedTasks) : undefined
-                    )}
-                    className="flex-1 gap-2"
-                  >
-                    <Check size={16} />
-                    {scope === 'task' ? 'Create Task' : 'Create Requirements & Tasks'}
-                  </Button>
-                  <Button variant="secondary" onClick={handleReject} className="gap-2">
-                    <RefreshCw size={16} />
-                    Request Changes
-                  </Button>
-                </div>
-              )}
+            /* Proposal ready - review in panel */
+            <div className="text-center text-sm text-neutral-500">
+              Review proposal in the editor panel
             </div>
           ) : currentQuestion ? (
             /* Question input */
