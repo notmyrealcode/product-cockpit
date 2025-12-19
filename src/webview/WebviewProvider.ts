@@ -253,11 +253,8 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'processText':
                         this.handleProcessText(message.text);
                         break;
-                    case 'installSox':
-                        this.handleInstallSox();
-                        break;
-                    case 'installWhisper':
-                        this.handleInstallWhisper(message.method);
+                    case 'installVoiceDeps':
+                        await this.handleInstallVoiceDeps();
                         break;
                     case 'checkSetup':
                         await this.handleCheckSetup();
@@ -776,21 +773,37 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private handleInstallSox(): void {
-        const terminal = vscode.window.createTerminal('Install Sox');
-        terminal.sendText('brew install sox && echo "\\n✅ Sox installed. You can close this terminal."');
-        terminal.show();
-    }
+    private async handleInstallVoiceDeps(): Promise<void> {
+        // Check what's needed
+        const audioCheck = await this.audioRecorder.isAvailable();
+        const whisperBinary = await this.whisperService.getBinaryPath();
 
-    private async handleInstallWhisper(method: 'homebrew' | 'source'): Promise<void> {
-        if (method === 'homebrew') {
-            const terminal = vscode.window.createTerminal('Install Whisper');
-            terminal.sendText('brew install whisper-cpp && echo "\\n✅ whisper.cpp installed. You can close this terminal."');
-            terminal.show();
-        } else {
-            // Use the existing setup method which handles source build
-            await this.whisperService.setup();
+        const packages: string[] = [];
+        if (!audioCheck.available) packages.push('sox');
+        if (!whisperBinary) packages.push('whisper-cpp');
+
+        if (packages.length === 0) {
+            // Nothing to install, just check setup
+            await this.handleCheckSetup();
+            return;
         }
+
+        const terminal = vscode.window.createTerminal('Shepherd Setup');
+
+        // Listen for terminal close to auto-check setup
+        const disposable = vscode.window.onDidCloseTerminal(async (closedTerminal) => {
+            if (closedTerminal === terminal) {
+                disposable.dispose();
+                // Wait a moment for brew to finish writing
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await this.handleCheckSetup();
+            }
+        });
+
+        // Install and exit on success
+        const installCmd = `brew install ${packages.join(' ')} && exit`;
+        terminal.sendText(installCmd);
+        terminal.show();
     }
 
     private async handleCheckSetup(): Promise<void> {
