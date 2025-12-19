@@ -872,7 +872,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             setTimeout(() => {
                 vscode.commands.executeCommand(
                     'workbench.action.openWalkthrough',
-                    'justineckhouse.shepherd#shepherd.welcome',
+                    'JustinEckhouse.shepherd#shepherd.welcome',
                     false
                 );
             }, 300);

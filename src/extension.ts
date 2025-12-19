@@ -42,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 setTimeout(() => {
                     vscode.commands.executeCommand(
                         'workbench.action.openWalkthrough',
-                        'justineckhouse.shepherd#shepherd.welcome',
+                        'JustinEckhouse.shepherd#shepherd.welcome',
                         false
                     );
                 }, 300);
@@ -55,7 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('shepherd.openWalkthrough', () => {
             vscode.commands.executeCommand(
                 'workbench.action.openWalkthrough',
-                'justineckhouse.shepherd#shepherd.welcome',
+                'JustinEckhouse.shepherd#shepherd.welcome',
                 false
             );
         })
@@ -84,7 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
             setTimeout(() => {
                 vscode.commands.executeCommand(
                     'workbench.action.openWalkthrough',
-                    'justineckhouse.shepherd#shepherd.welcome',
+                    'JustinEckhouse.shepherd#shepherd.welcome',
                     false
                 );
             }, 300);
@@ -105,7 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Open walkthrough for new users
         vscode.commands.executeCommand(
             'workbench.action.openWalkthrough',
-            'justineckhouse.shepherd#shepherd.welcome',
+            'JustinEckhouse.shepherd#shepherd.welcome',
             false
         );
     }
