@@ -4,3 +4,6 @@ node_modules/
 .vscode-test/
 test-workspace/
 .env
+
+# Shepherd runtime data
+.shepherd/

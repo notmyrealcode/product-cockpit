@@ -17,6 +17,97 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Function to increment version
+increment_version() {
+    local version="$1"
+    local part="$2"
+
+    IFS='.' read -r major minor patch <<< "$version"
+
+    case $part in
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        patch)
+            patch=$((patch + 1))
+            ;;
+    esac
+
+    echo "${major}.${minor}.${patch}"
+}
+
+# Function to handle version bumping
+bump_version() {
+    # Get current version from package.json
+    CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+    echo -e "${BLUE}Version Bump${NC}"
+    echo "============"
+    echo ""
+    echo "Current version: ${YELLOW}${CURRENT_VERSION}${NC}"
+    echo ""
+    echo "Increment which part?"
+    echo "  1) Patch (${CURRENT_VERSION} → $(increment_version $CURRENT_VERSION patch))"
+    echo "  2) Minor (${CURRENT_VERSION} → $(increment_version $CURRENT_VERSION minor))"
+    echo "  3) Major (${CURRENT_VERSION} → $(increment_version $CURRENT_VERSION major))"
+    echo "  4) Cancel"
+    echo ""
+    read -p "Select option [1-4]: " version_choice
+
+    case $version_choice in
+        1) NEW_VERSION=$(increment_version $CURRENT_VERSION patch) ;;
+        2) NEW_VERSION=$(increment_version $CURRENT_VERSION minor) ;;
+        3) NEW_VERSION=$(increment_version $CURRENT_VERSION major) ;;
+        4|*) echo "Cancelled."; return 1 ;;
+    esac
+
+    echo ""
+    echo -e "Proposed change: ${YELLOW}${CURRENT_VERSION}${NC} → ${GREEN}${NEW_VERSION}${NC}"
+    echo ""
+    read -p "Proceed with version bump? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        return 1
+    fi
+
+    # Update package.json version using node
+    node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+        pkg.version = '${NEW_VERSION}';
+        fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
+
+    echo -e "${GREEN}Updated package.json to version ${NEW_VERSION}${NC}"
+
+    # Ask about git commit
+    echo ""
+    read -p "Commit this change to git? [y/N]: " do_commit
+    if [[ "$do_commit" =~ ^[Yy]$ ]]; then
+        git add package.json
+        git commit -m "chore: bump version to ${NEW_VERSION}"
+        echo -e "${GREEN}Committed to git${NC}"
+
+        # Ask about git push
+        echo ""
+        read -p "Push to remote? [y/N]: " do_push
+        if [[ "$do_push" =~ ^[Yy]$ ]]; then
+            git push
+            echo -e "${GREEN}Pushed to remote${NC}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}Version bump complete!${NC}"
+    return 0
+}
+
 echo -e "${BLUE}Shepherd Extension Builder${NC}"
 echo "=========================="
 echo ""
@@ -26,8 +117,9 @@ echo "What would you like to do?"
 echo "  1) Build only (create .vsix package)"
 echo "  2) Build and publish"
 echo "  3) Publish only (skip build)"
+echo "  4) Bump version"
 echo ""
-read -p "Select option [1-3]: " action
+read -p "Select option [1-4]: " action
 
 case $action in
     1)
@@ -41,6 +133,10 @@ case $action in
     3)
         DO_BUILD=false
         DO_PUBLISH=true
+        ;;
+    4)
+        bump_version
+        exit $?
         ;;
     *)
         echo -e "${RED}Invalid option${NC}"

@@ -127,6 +127,13 @@ Design decisions (design.md scope):
  */
 export const PROJECT_INTERVIEW_PROMPT = `You are a requirements analyst helping define a project plan.
 
+CRITICAL - CONSOLIDATE FEATURES:
+- Create FEWER, LARGER features rather than many small ones
+- A feature should contain everything an LLM would need to build together
+- Closely related functionality belongs in ONE feature so the LLM has full context
+- Example: "User Authentication" (login, logout, password reset, session management) = ONE feature, not four
+- Example: "Dashboard" (charts, filters, data display, export) = ONE feature, not four
+
 CRITICAL - ACKNOWLEDGE USER INPUT:
 - If the user already specified details (colors, features, behavior), DO NOT ask about those things again
 - Only ask about things the user has NOT already told you
@@ -146,6 +153,7 @@ APPROACH:
 PROPOSAL REQUIREMENTS:
 - ALWAYS include a non-empty requirementDoc with markdown describing the project
 - ALWAYS include a requirementPath like "docs/requirements/project-name.md"
+- Keep features consolidated - related work in same feature
 
 ${JSON_FORMAT_RULES}`;
 
@@ -153,6 +161,11 @@ ${JSON_FORMAT_RULES}`;
  * System prompt for new feature requirements interview
  */
 export const NEW_FEATURE_INTERVIEW_PROMPT = `You are a requirements analyst helping define a new feature for an EXISTING app.
+
+CRITICAL - SINGLE FEATURE ONLY:
+- You MUST create exactly ONE feature in your proposal
+- Even if the user describes multiple aspects, combine them into ONE cohesive feature
+- All tasks belong to this single feature (featureIndex: 0)
 
 CRITICAL - ACKNOWLEDGE USER INPUT:
 - If the user already specified details (colors, behavior, implementation), DO NOT ask about those things again
@@ -175,6 +188,7 @@ APPROACH:
 PROPOSAL REQUIREMENTS:
 - ALWAYS include a non-empty requirementDoc with markdown describing the feature
 - ALWAYS include a requirementPath like "docs/requirements/feature-name.md"
+- ALWAYS create exactly ONE feature with all related tasks
 
 ${JSON_FORMAT_RULES}`;
 
@@ -214,6 +228,65 @@ export const INTERVIEW_PROMPTS = {
 } as const;
 
 export type InterviewScope = keyof typeof INTERVIEW_PROMPTS;
+
+// =============================================================================
+// INTENSITY MODE PROMPTS
+// =============================================================================
+
+/**
+ * Prompt addition for minimal intensity mode
+ * Appended to interview prompts when user selects minimal mode
+ */
+export const MINIMAL_INTENSITY_PROMPT = `
+INTENSITY MODE: MINIMAL
+
+You are in MINIMAL mode. Only ask clarifying questions when:
+- The requirements are ambiguous to the point where you cannot proceed
+- Critical information is missing that would prevent successful implementation
+- There are direct contradictions that must be resolved
+
+If the requirements are reasonably clear, proceed directly to proposal without questions.
+Do not ask about edge cases, nice-to-haves, or potential improvements unless specifically relevant to blockers.
+Bias heavily toward action - when in doubt, make reasonable assumptions and propose.`;
+
+/**
+ * Prompt addition for deep dive intensity mode
+ * Appended to interview prompts when user selects deep dive mode
+ */
+export const DEEP_DIVE_INTENSITY_PROMPT = `
+INTENSITY MODE: DEEP DIVE
+
+You are in DEEP DIVE mode. Your goal is to ensure comprehensive, detailed requirements before any implementation begins.
+
+For each requirement:
+1. Explore the user's intent and goals thoroughly
+2. Ask about edge cases and error scenarios
+3. Identify potential issues or considerations the user may not have thought of
+4. Make suggestions for improvements or alternatives when appropriate
+5. Ensure all acceptance criteria are clearly defined
+
+Take multiple rounds of questions if needed. It's better to ask more questions upfront than to make assumptions.
+
+Cover these areas proactively:
+- Error handling: What happens when things go wrong?
+- Boundary conditions: Limits, empty states, maximums
+- Accessibility: Keyboard navigation, screen readers, color contrast
+- Performance implications: Large datasets, slow networks
+- Integration points: How this connects with existing features
+
+Don't rush to proposal. Ensure comprehensive understanding first.`;
+
+/**
+ * Map of intensity modes to their prompt additions
+ * 'balanced' has no addition (default behavior)
+ */
+export const INTENSITY_PROMPTS = {
+    'minimal': MINIMAL_INTENSITY_PROMPT,
+    'balanced': '', // Default behavior, no modification
+    'deep-dive': DEEP_DIVE_INTENSITY_PROMPT
+} as const;
+
+export type ThoughtPartnerIntensity = keyof typeof INTENSITY_PROMPTS;
 
 // =============================================================================
 // TASK PARSER PROMPTS

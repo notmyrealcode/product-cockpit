@@ -11,8 +11,18 @@ Shepherd is a VS Code extension that provides product managers with a visual int
 - Requirements authoring via Claude Code interview
 - MCP server integration for AI agent task coordination
 
+# Before Writing Code
+
+**REQUIRED:** Read `docs/TECH.md` before implementing any feature or fix. It documents:
+- Component architecture and data flow
+- Database schema and repositories
+- Webview/extension message protocols
+- Interview service and prompts system
+
+This ensures you understand existing patterns and don't duplicate or conflict with current architecture.
+
 # Design
-Please refer to @docs/design_style_guide.md 
+Please refer to @docs/design_style_guide.md
 
 # Making Updates
 1. Commit to git (no author names in commit messages)

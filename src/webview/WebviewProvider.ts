@@ -6,7 +6,7 @@ import { WhisperService } from '../voice/WhisperService';
 import { AudioRecorder } from '../voice/AudioRecorder';
 import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessage, InterviewScope, InterviewContext } from '../interview/InterviewService';
 import { ProjectContext } from '../context/ProjectContext';
-import { TASK_PARSER_PROMPT, TASK_PARSER_SCHEMA } from '../prompts';
+import { TASK_PARSER_PROMPT, TASK_PARSER_SCHEMA, type ThoughtPartnerIntensity } from '../prompts';
 import type { Task } from '../tasks/types';
 
 import { exec } from 'child_process';
@@ -186,6 +186,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'deleteFeature':
                         this.taskStore.deleteFeature(message.id);
                         break;
+                    case 'markFeatureDone':
+                        this.taskStore.markFeatureDone(message.id);
+                        break;
                     case 'reorderFeatures':
                         this.taskStore.reorderFeatures(message.featureIds);
                         break;
@@ -223,7 +226,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         }
                         break;
                     case 'startInterview':
-                        this.handleStartInterview(message.scope, message.initialInput);
+                        this.handleStartInterview(message.scope, message.initialInput, message.intensity);
                         break;
                     case 'answerQuestion':
                         this.interviewService.answerQuestion(message.questionId, message.answer);
@@ -454,7 +457,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
         await this.writeRequirementsIndex(index);
     }
 
-    private async handleStartInterview(scope: InterviewScope, initialInput?: string): Promise<void> {
+    private async handleStartInterview(scope: InterviewScope, initialInput?: string, intensity: ThoughtPartnerIntensity = 'balanced'): Promise<void> {
         this.interviewScope = scope;
         this.currentProposal = undefined;
 
@@ -538,7 +541,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                 }
-            }, context);
+            }, context, intensity);
 
             // Notify webview that interview started
             if (this._view) {
@@ -1068,8 +1071,20 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             ? `Build task ${ids}. Use shepherd MCP tools to get details. Set status to ready-for-signoff when complete.`
             : `Build these tasks in order: ${ids}. Use shepherd MCP tools to get details. Set each task to ready-for-signoff when complete.`;
 
-        this.buildTerminal.sendText(`claude "${prompt}"`, true); // true = add newline/enter
-        this.buildTerminal.show();
+        try {
+            // First, paste the command text without Enter
+            this.buildTerminal.sendText(`claude "${prompt}"`, false);
+
+            // Small delay to ensure paste completes, then send Enter
+            await new Promise(resolve => setTimeout(resolve, 100));
+            this.buildTerminal.sendText('', true); // Send Enter key
+
+            this.buildTerminal.show();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            vscode.window.showErrorMessage(`Failed to send build command: ${message}`);
+            this.cleanupBuild();
+        }
     }
 
     private checkBuildComplete(): void {

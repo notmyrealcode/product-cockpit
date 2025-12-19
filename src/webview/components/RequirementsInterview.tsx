@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Loader2, Flame, Smile, ExternalLink } from 'lucide-react';
 import { Button } from './ui';
 import { RecordButton } from './RecordButton';
+import { IntensitySelector } from './IntensitySelector';
 import { cn } from '../lib/utils';
 import { vscode } from '../lib/vscode';
-import type { InterviewQuestion, InterviewProposal, InterviewMessage } from '../types';
+import type { InterviewQuestion, InterviewProposal, InterviewMessage, ThoughtPartnerIntensity } from '../types';
 import { getWaitingContent, preloadHNStories, type WaitingContent } from '../lib/waitingContent';
 
 interface RequirementsInterviewProps {
@@ -15,7 +16,7 @@ interface RequirementsInterviewProps {
   isThinking: boolean;
   error: string | null;
   awaitingInput?: boolean;  // Show initial input before starting
-  onStart: (initialInput: string) => void;  // Start with user's initial input
+  onStart: (initialInput: string, intensity: ThoughtPartnerIntensity) => void;  // Start with user's initial input and intensity
   onAnswer: (questionId: string, answer: string) => void;
   onCancel: () => void;
 }
@@ -33,6 +34,7 @@ export function RequirementsInterview({
   onCancel,
 }: RequirementsInterviewProps) {
   const [initialInput, setInitialInput] = useState('');
+  const [intensity, setIntensity] = useState<ThoughtPartnerIntensity>('balanced');
   const [textAnswer, setTextAnswer] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showOtherInput, setShowOtherInput] = useState(false);
@@ -111,7 +113,7 @@ export function RequirementsInterview({
 
   const handleStartInterview = () => {
     if (initialInput.trim()) {
-      onStart(initialInput.trim());
+      onStart(initialInput.trim(), intensity);
       setInitialInput('');
     }
   };
@@ -329,7 +331,7 @@ export function RequirementsInterview({
         <div className="border-t border-neutral-200 p-4">
           {awaitingInput ? (
             /* Initial input */
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="relative">
                 <textarea
                   ref={initialInputRef}
@@ -352,6 +354,7 @@ export function RequirementsInterview({
                   />
                 </div>
               </div>
+              <IntensitySelector value={intensity} onChange={setIntensity} />
               <div className="flex justify-between items-center">
                 <span className="text-xs text-neutral-400">⌘+Enter to start</span>
                 <Button onClick={handleStartInterview} disabled={!initialInput.trim()}>

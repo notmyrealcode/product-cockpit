@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
 import { SessionRepo } from '../db/repositories/sessionRepo';
 import type { RequirementSession } from '../db/types';
-import { INTERVIEW_RESPONSE_SCHEMA, INTERVIEW_PROMPTS, type InterviewScope } from '../prompts';
+import { INTERVIEW_RESPONSE_SCHEMA, INTERVIEW_PROMPTS, INTENSITY_PROMPTS, type InterviewScope, type ThoughtPartnerIntensity } from '../prompts';
 
 export type { InterviewScope };
 
@@ -47,6 +47,7 @@ export class InterviewService {
     private process: ChildProcess | null = null;
     private session: RequirementSession | null = null;
     private scope: InterviewScope = 'new-feature';
+    private intensity: ThoughtPartnerIntensity = 'balanced';
     private messages: InterviewMessage[] = [];
     private callbacks: InterviewCallbacks | null = null;
     private buffer = '';
@@ -58,7 +59,8 @@ export class InterviewService {
         scope: InterviewScope,
         initialInput: string | undefined,
         callbacks: InterviewCallbacks,
-        context?: InterviewContext
+        context?: InterviewContext,
+        intensity: ThoughtPartnerIntensity = 'balanced'
     ): Promise<string> {
         if (this.process) {
             this.stop();
@@ -67,6 +69,7 @@ export class InterviewService {
         // Create session in database
         this.session = SessionRepo.create(scope, initialInput || '');
         this.scope = scope;
+        this.intensity = intensity;
         this.messages = [];
         this.callbacks = callbacks;
         this.buffer = '';
@@ -238,7 +241,9 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         delete env.ENABLE_IDE_INTEGRATION;
 
         // Get scope-specific system prompt from centralized prompts
-        const systemPrompt = INTERVIEW_PROMPTS[this.scope];
+        const basePrompt = INTERVIEW_PROMPTS[this.scope];
+        const intensityAddition = INTENSITY_PROMPTS[this.intensity];
+        const systemPrompt = intensityAddition ? `${basePrompt}\n\n${intensityAddition}` : basePrompt;
 
         // Escape for shell
         const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
@@ -438,9 +443,12 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                     type: (response.questionType as string) === 'choice' ? 'choice' : 'text',
                     options: response.options as string[] | undefined,
                 };
-                // Don't add to messages - question UI displays the text
-                // Context is maintained via Claude session
                 this.retryCount = 0;  // Valid response, reset retry counter
+
+                // Add assistant message to indicate Claude asked a question
+                // This ensures hasAssistantMessages check works correctly
+                this.addAssistantMessage(question.text);
+
                 this.callbacks?.onQuestion(question);
                 break;
             }
@@ -457,6 +465,12 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                     break;
                 }
                 this.retryCount = 0;  // Valid response, reset retry counter
+
+                // Add assistant message to indicate Claude asked questions
+                // This ensures hasAssistantMessages check works correctly
+                const questionTexts = rawQuestions.map(q => q.text).join('\n\n');
+                this.addAssistantMessage(questionTexts);
+
                 for (const q of rawQuestions) {
                     const question: InterviewQuestion = {
                         id: q.id,

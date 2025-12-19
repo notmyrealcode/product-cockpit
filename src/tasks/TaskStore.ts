@@ -43,6 +43,12 @@ export class TaskStore {
         this._onDidChange.fire();
     }
 
+    markFeatureDone(id: string): Feature | null {
+        const result = FeatureRepo.markDone(id);
+        this._onDidChange.fire();
+        return result;
+    }
+
     reorderFeatures(ids: string[]): void {
         FeatureRepo.reorder(ids);
         this._onDidChange.fire();

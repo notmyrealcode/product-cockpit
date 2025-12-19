@@ -3,5 +3,8 @@
     "allow": [
       "mcp__shepherd"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "shepherd"
+  ]
 }

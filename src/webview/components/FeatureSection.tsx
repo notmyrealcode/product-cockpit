@@ -9,9 +9,20 @@ import {
 import { ChevronDown, ChevronRight, GripVertical, Play, Pencil, Trash2, Check, X, FileText } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui';
-import { Tooltip } from './Tooltip';
 import { cn } from '../lib/utils';
-import type { Feature, Task, TaskStatus } from '../types';
+import type { Feature, Task, TaskStatus, FeatureStatus } from '../types';
+
+const featureStatusLabels: Record<FeatureStatus, string> = {
+  'active': 'Active',
+  'done': 'Done'
+};
+
+const featureStatusColors: Record<FeatureStatus, string> = {
+  'active': 'bg-primary/10 text-primary border-primary/20',
+  'done': 'bg-success/10 text-success border-success/20'
+};
+
+const featureStatusOptions: FeatureStatus[] = ['active', 'done'];
 
 interface FeatureSectionProps {
   feature: Feature;
@@ -29,6 +40,7 @@ interface FeatureSectionProps {
   onTaskDelete: (id: string) => void;
   onFeatureEdit?: (id: string, title: string, description: string) => void;
   onFeatureDelete?: (id: string) => void;
+  onFeatureStatusChange?: (id: string, status: FeatureStatus) => void;
   onOpenRequirement?: (path: string) => void;
 }
 
@@ -48,6 +60,7 @@ export function FeatureSection({
   onTaskDelete,
   onFeatureEdit,
   onFeatureDelete,
+  onFeatureStatusChange,
   onOpenRequirement,
 }: FeatureSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -188,53 +201,82 @@ export function FeatureSection({
           )}
         </div>
 
-        {/* Bottom row: action buttons (only for features, not ungrouped) */}
+        {/* Bottom row: status dropdown + action buttons (only for features, not ungrouped) */}
         {!isUngrouped && !isEditing && (
-          <div className="flex items-center justify-end gap-0.5 mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
-            {feature.requirement_path && onOpenRequirement && (
+          <div className="flex items-center justify-between mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
+            {/* Status dropdown */}
+            {onFeatureStatusChange && (
+              <div className="relative inline-flex items-center">
+                <select
+                  value={feature.status}
+                  onChange={(e) => onFeatureStatusChange(feature.id, e.target.value as FeatureStatus)}
+                  className={cn(
+                    'text-[10px] font-medium rounded-full pl-2 pr-6 py-0.5 border cursor-pointer',
+                    'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
+                    'transition-fast appearance-none',
+                    featureStatusColors[feature.status]
+                  )}
+                >
+                  {featureStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {featureStatusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={10}
+                  className="absolute right-1.5 pointer-events-none opacity-60"
+                />
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-0.5">
+              {feature.requirement_path && onOpenRequirement && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onOpenRequirement(feature.requirement_path!)}
+                  className="h-6 w-6 text-neutral-400 hover:text-primary hover:bg-primary/10"
+                >
+                  <FileText size={12} />
+                </Button>
+              )}
+              {onBuildFeature && tasks.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onBuildFeature(feature.id)}
+                  disabled={buildDisabled}
+                  className={cn(
+                    'h-6 w-6',
+                    buildDisabled
+                      ? 'text-neutral-200 cursor-not-allowed'
+                      : 'text-neutral-400 hover:text-success hover:bg-success/10'
+                  )}
+                >
+                  <Play size={12} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => onOpenRequirement(feature.requirement_path!)}
-                className="h-6 w-6 text-neutral-400 hover:text-primary hover:bg-primary/10"
+                onClick={() => setIsEditing(true)}
+                className="h-6 w-6 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
               >
-                <FileText size={12} />
+                <Pencil size={12} />
               </Button>
-            )}
-            {onBuildFeature && tasks.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onBuildFeature(feature.id)}
-                disabled={buildDisabled}
-                className={cn(
-                  'h-6 w-6',
-                  buildDisabled
-                    ? 'text-neutral-200 cursor-not-allowed'
-                    : 'text-neutral-400 hover:text-success hover:bg-success/10'
-                )}
-              >
-                <Play size={12} />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(true)}
-              className="h-6 w-6 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
-            >
-              <Pencil size={12} />
-            </Button>
-            {onFeatureDelete && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onFeatureDelete(feature.id)}
-                className="h-6 w-6 text-neutral-400 hover:text-danger hover:bg-danger/10"
-              >
-                <Trash2 size={12} />
-              </Button>
-            )}
+              {onFeatureDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onFeatureDelete(feature.id)}
+                  className="h-6 w-6 text-neutral-400 hover:text-danger hover:bg-danger/10"
+                >
+                  <Trash2 size={12} />
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>

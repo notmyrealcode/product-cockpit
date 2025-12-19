@@ -2,6 +2,14 @@
 
 All notable changes to Shepherd will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Mark feature as done - marks the feature and all its tasks as done in one click
+- Thought partner intensity selector (Minimal/Balanced/Deep Dive) for interview customization
+- Database migration system for seamless extension updates
+
 ## [0.0.5] - 2025-12-18
 
 ### Fixed

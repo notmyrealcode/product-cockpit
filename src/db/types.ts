@@ -1,5 +1,6 @@
 export type TaskType = 'task' | 'bug';
 export type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' | 'rework';
+export type FeatureStatus = 'active' | 'done';
 export type SessionStatus = 'drafting' | 'clarifying' | 'proposed' | 'complete' | 'cancelled';
 
 export interface Project {
@@ -16,6 +17,7 @@ export interface Feature {
     title: string;
     description: string | null;
     requirement_path: string | null;
+    status: FeatureStatus;
     priority: number;
     created_at: string;
     updated_at: string;

@@ -19,7 +19,7 @@ VS Code extension with React Webview UI and MCP server for Claude Code task mana
 ┌─────────────────┐     └────────┬───────┘
 │ WebviewProvider │              │
 └─────────────────┘              ▼
-                        .shepherd/data.db (SQLite via sql.js)
+                       .shepherd/data.db (SQLite via sql.js)
 ```
 
 ### Database (`src/db/`)
@@ -27,17 +27,27 @@ SQLite database using sql.js (WASM). No native dependencies.
 
 **Schema:**
 - `project` - Singleton project metadata
-- `features` - Feature containers for grouping tasks
+- `features` - Feature containers with status tracking
 - `tasks` - Tasks with optional feature_id foreign key
-- `requirement_sessions` - Interview state tracking (future)
+- `requirement_sessions` - Interview state tracking
+- `schema_migrations` - Database version tracking
+
+### Migrations (`src/db/migrations.ts`)
+Sequential migration system for schema evolution. Migrations are idempotent and tracked in `schema_migrations` table.
 
 ### Repositories (`src/db/repositories/`)
 - `ProjectRepo` - Project CRUD
-- `FeatureRepo` - Feature CRUD with reordering
+- `FeatureRepo` - Feature CRUD with reordering and `markDone()`
 - `TaskRepo` - Task CRUD with feature relationships
+- `SessionRepo` - Interview session persistence
 
 ### TaskStore (`src/tasks/TaskStore.ts`)
 Wraps repositories. Emits `onDidChange` event on mutations.
+
+Key methods:
+- `markFeatureDone(id)` - Marks feature and all its tasks as done
+- `getTaskWithFeature(id)` - Returns task with linked feature info
+- `archiveDoneTasks()` - Deletes all done tasks
 
 ### WebviewProvider (`src/webview/WebviewProvider.ts`)
 Implements `WebviewViewProvider` for VS Code sidebar. Handles message passing between webview and TaskStore.
@@ -47,20 +57,36 @@ React 18 application bundled with esbuild. Uses Tailwind CSS v4 for styling.
 
 Key components:
 - `App.tsx` - Main app, manages task state and message handlers
-- `FeatureSection.tsx` - Collapsible feature with nested tasks
+- `FeatureSection.tsx` - Collapsible feature with nested tasks and status
 - `TaskList.tsx` - Drag-and-drop task list using @dnd-kit
 - `TaskCard.tsx` - Individual task card with inline editing
 - `AddMenu.tsx` - Dropdown menu for creating tasks/bugs/features
 - `AddTaskForm.tsx` - Form to create new tasks with title + description
+- `IntensitySelector.tsx` - Thought partner intensity selection (minimal/balanced/deep-dive)
+- `ReworkFeedbackModal.tsx` - Modal for providing rework feedback on tasks
 - `VoiceCapture.tsx` - Voice recording with MediaRecorder API
 - `RequirementsList.tsx` - Requirements browser with interview trigger
 - `RequirementsInterview.tsx` - Modal for Claude interview workflow
+- `ProposalReview.tsx` - Review and approve/reject interview proposals
 
 ### HttpBridge (`src/http/bridge.ts`)
 Localhost HTTP server on random port. Writes port to `.shepherd/.port`. Routes MCP tool calls to TaskStore.
 
 ### MCP Server (`.shepherd/mcp-server.js`)
 Standalone stdio server spawned by Claude Code. Reads port file, proxies JSON-RPC to HTTP bridge.
+
+### Prompts (`src/prompts/index.ts`)
+Centralized LLM prompts and JSON schemas for interview and task parsing.
+
+**Interview Scopes:**
+- `project` - Full project requirements
+- `new-feature` - Single feature for existing app
+- `task` - Quick task definition
+
+**Intensity Modes:**
+- `minimal` - Skip to proposal unless blocked
+- `balanced` - Default questioning behavior
+- `deep-dive` - Thorough exploration of edge cases
 
 ## UI Architecture
 
@@ -99,17 +125,6 @@ npm run test:ui          # Browser-based test UI
 - `src/**/*.test.ts` - Test files (excluded from TypeScript compilation)
 - `vitest.config.ts` - Vitest configuration
 
-### Writing Tests
-```typescript
-import { describe, it, expect } from 'vitest';
-
-describe('MyService', () => {
-    it('does something', () => {
-        expect(result).toBe(expected);
-    });
-});
-```
-
 ### Claude CLI Integration Tests
 Tests in `src/interview/InterviewService.test.ts` call Claude CLI directly with `execSync` to verify JSON schema validation. Uses 60s timeout for API calls.
 
@@ -145,15 +160,20 @@ interface Project {
   updated_at: string;
 }
 
+type FeatureStatus = 'active' | 'done';
+
 interface Feature {
   id: string;               // UUID
   title: string;
   description: string | null;
   requirement_path: string | null;  // Links to docs/requirements/*.md
+  status: FeatureStatus;    // active or done
   priority: number;         // Order (0 = highest)
   created_at: string;
   updated_at: string;
 }
+
+type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' | 'rework';
 
 interface Task {
   id: string;               // UUID
@@ -161,10 +181,14 @@ interface Task {
   type: 'task' | 'bug';
   title: string;
   description: string | null;
-  status: TaskStatus;       // todo | in-progress | ready-for-signoff | done | rework
+  status: TaskStatus;
   priority: number;         // Order (0 = highest)
   created_at: string;
   updated_at: string;
+}
+
+interface TaskWithFeature extends Task {
+  feature?: { id: string; title: string } | null;
 }
 ```
 
@@ -282,20 +306,40 @@ Interactive Claude-powered workflow for defining features with requirements.
 ```
 
 ### InterviewService (`src/interview/InterviewService.ts`)
-Spawns Claude CLI with `--output-format json --json-schema` for structured output. Schema enforces response types:
+Spawns Claude CLI with `--output-format json --json-schema` for structured output.
+
+**Interview Scopes:**
+- `project` - Full project with multiple features
+- `new-feature` - Single feature for existing app
+- `task` - Quick task definition (minimal questions)
+
+**Intensity Modes:**
+- `minimal` - Skip questions, propose immediately unless blocked
+- `balanced` - Default behavior, 2-4 questions per round
+- `deep-dive` - Thorough exploration of edge cases, accessibility, performance
+
+**Response Schema:** Enforces response types:
 - `questions` - Array of questions with id, text, questionType (text/choice), optional options
-- `proposal` - Final requirement doc + features + tasks
+- `proposal` - Requirement doc + features + tasks + optional design.md updates
 
 CLI outputs wrapped as `{"type":"result","structured_output":{...}}`
 
 ### Message Flow
 1. User clicks "New Feature (with Requirements)" in AddMenu
-2. WebviewProvider calls `InterviewService.start()`
-3. InterviewService spawns Claude with system prompt
-4. Claude asks questions via JSON stream
-5. User answers in RequirementsInterview modal
-6. On proposal, user reviews and approves/rejects
-7. Approval triggers: save requirement doc, create features, create tasks
+2. User selects intensity mode (minimal/balanced/deep-dive)
+3. WebviewProvider calls `InterviewService.start()`
+4. InterviewService spawns Claude with scope-specific system prompt
+5. Claude asks questions via JSON stream (batch of 2-4)
+6. User answers in RequirementsInterview modal
+7. On proposal, user reviews and approves/rejects
+8. Approval triggers: save requirement doc, create features, create tasks
+
+### Context Injection
+Interview receives context about the existing app:
+- Project title and description
+- Existing features and their descriptions
+- Existing requirements with summaries
+- Current design.md content (for visual/UI decisions)
 
 ## Project Context
 

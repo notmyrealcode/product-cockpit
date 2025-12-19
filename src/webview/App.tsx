@@ -27,12 +27,14 @@ import { AddMenu } from './components/AddMenu';
 import { RecordButton } from './components/RecordButton';
 import { Toast, ToastType } from './components/Toast';
 import { VoiceSetupModal } from './components/VoiceSetupModal';
-import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
+import { ReworkFeedbackModal } from './components/ReworkFeedbackModal';
+import { Button, Tooltip } from './components/ui';
+import { Play, ChevronDown, ChevronRight, X, Settings, Info, RotateCcw } from 'lucide-react';
+import { formatReworkDescription } from './lib/formatReworkDescription';
 
 // Shepherd logo
 import shepherdLogo from './assets/logo.png';
-import type { Task, Feature, Requirement, Project, TaskStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal } from './types';
+import type { Task, Feature, Requirement, Project, TaskStatus, FeatureStatus, ExtensionMessage, InterviewMessage, InterviewQuestion, InterviewProposal, ThoughtPartnerIntensity } from './types';
 
 const PARSER_MODELS = [
   { id: 'haiku', name: 'Haiku', description: 'Fast & cheap' },
@@ -91,6 +93,13 @@ export default function App() {
   const [interviewError, setInterviewError] = useState<string | null>(null);
   const [currentDesignMd, setCurrentDesignMd] = useState<string | null>(null);
 
+  // Rework feedback modal state
+  const [reworkModal, setReworkModal] = useState<{
+    taskId: string;
+    taskTitle: string;
+    previousStatus: TaskStatus;
+  } | null>(null);
+
   // Refs to access current state in event handlers (avoid stale closures)
   const interviewScopeRef = useRef(interviewScope);
   const interviewMessagesRef = useRef(interviewMessages);
@@ -110,11 +119,15 @@ export default function App() {
   const activeTasks = tasks.filter(t => t.status !== 'done');
   const doneTasks = tasks.filter(t => t.status === 'done');
 
+  // Split features into active and done
+  const activeFeatures = features.filter(f => f.status !== 'done');
+  const doneFeatures = features.filter(f => f.status === 'done');
+
   // Group active tasks by feature
   const tasksByFeature = useMemo(() => {
     const grouped = new Map<string, Task[]>();
-    // Initialize with all features (even empty ones)
-    features.forEach(f => grouped.set(f.id, []));
+    // Initialize with all active features (even empty ones)
+    activeFeatures.forEach(f => grouped.set(f.id, []));
     grouped.set(UNGROUPED_FEATURE.id, []);
 
     activeTasks.forEach(task => {
@@ -130,13 +143,32 @@ export default function App() {
     });
 
     return grouped;
-  }, [features, activeTasks]);
+  }, [activeFeatures, activeTasks]);
 
   // Feature IDs for top-level sorting (features only, not tasks)
   // Tasks are sorted within their own SortableContext inside FeatureSection
   const featureIds = useMemo(() => {
-    return features.map(f => f.id);
-  }, [features]);
+    return activeFeatures.map(f => f.id);
+  }, [activeFeatures]);
+
+  // Group done tasks by feature for archive section
+  const doneTasksByFeature = useMemo(() => {
+    const grouped = new Map<string, { feature: Feature | null; tasks: Task[] }>();
+
+    doneTasks.forEach(task => {
+      const featureId = task.feature_id || UNGROUPED_FEATURE.id;
+      if (!grouped.has(featureId)) {
+        // Find the feature (could be in doneFeatures or still active)
+        const feature = featureId === UNGROUPED_FEATURE.id
+          ? null
+          : [...features].find(f => f.id === featureId) || null;
+        grouped.set(featureId, { feature, tasks: [] });
+      }
+      grouped.get(featureId)!.tasks.push(task);
+    });
+
+    return grouped;
+  }, [doneTasks, features]);
 
   useEffect(() => {
     console.log('[App] useEffect mounting, posting ready');
@@ -288,7 +320,39 @@ export default function App() {
   };
 
   const handleStatusChange = (id: string, status: TaskStatus) => {
+    // Intercept 'rework' status to show feedback modal
+    if (status === 'rework') {
+      const task = tasks.find(t => t.id === id);
+      if (task) {
+        setReworkModal({
+          taskId: id,
+          taskTitle: task.title,
+          previousStatus: task.status,
+        });
+      }
+      return;
+    }
     vscode.postMessage({ type: 'updateTask', id, updates: { status } });
+  };
+
+  const handleReworkSubmit = (feedback: string) => {
+    if (!reworkModal) return;
+
+    const task = tasks.find(t => t.id === reworkModal.taskId);
+    if (task) {
+      const newDescription = formatReworkDescription(task.description, feedback);
+      // Update description first, then status
+      vscode.postMessage({
+        type: 'updateTask',
+        id: reworkModal.taskId,
+        updates: { description: newDescription, status: 'rework' as TaskStatus },
+      });
+    }
+    setReworkModal(null);
+  };
+
+  const handleReworkCancel = () => {
+    setReworkModal(null);
   };
 
   const handleTitleChange = (id: string, title: string) => {
@@ -318,10 +382,10 @@ export default function App() {
     setInterviewError(null);
   };
 
-  const handleStartInterview = (initialInput: string) => {
+  const handleStartInterview = (initialInput: string, intensity: ThoughtPartnerIntensity) => {
     setInterviewAwaitingInput(false);
     setInterviewThinking(true);
-    vscode.postMessage({ type: 'startInterview', scope: interviewScope, initialInput });
+    vscode.postMessage({ type: 'startInterview', scope: interviewScope, initialInput, intensity });
   };
 
   const handleInterviewAnswer = (questionId: string, answer: string) => {
@@ -454,6 +518,19 @@ export default function App() {
     vscode.postMessage({ type: 'deleteFeature', id });
   };
 
+  const handleFeatureStatusChange = (id: string, status: FeatureStatus) => {
+    if (status === 'done') {
+      // Use markFeatureDone to cascade status to all tasks
+      vscode.postMessage({ type: 'markFeatureDone', id });
+    } else {
+      vscode.postMessage({ type: 'updateFeature', id, updates: { status } });
+    }
+  };
+
+  const handleReactivateFeature = (id: string) => {
+    vscode.postMessage({ type: 'updateFeature', id, updates: { status: 'active' } });
+  };
+
   const handleBuildFeature = (featureId: string) => {
     if (buildInProgress) return;
     const featureTasks = tasksByFeature.get(featureId) || [];
@@ -544,20 +621,22 @@ export default function App() {
             <h1 className="text-xl font-semibold text-neutral-800">Shepherd</h1>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setAboutOpen(!aboutOpen)}
-              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
-              title="About & Attribution"
-            >
-              <Info size={16} />
-            </button>
-            <button
-              onClick={() => setSettingsOpen(!settingsOpen)}
-              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
-              title="Settings"
-            >
-              <Settings size={16} />
-            </button>
+            <Tooltip content="About & Attribution">
+              <button
+                onClick={() => setAboutOpen(!aboutOpen)}
+                className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
+              >
+                <Info size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip content="Settings">
+              <button
+                onClick={() => setSettingsOpen(!settingsOpen)}
+                className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"
+              >
+                <Settings size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
         <p className="text-xs text-neutral-500 mt-1">
@@ -827,14 +906,15 @@ export default function App() {
           <p className="text-xs text-primary font-medium">
             Build in progress... Claude is working on your tasks.
           </p>
-          <button
-            onClick={handleResetBuild}
-            className="text-xs text-primary/60 hover:text-primary flex items-center gap-1"
-            title="Reset build state if out of sync"
-          >
-            <X size={12} />
-            Reset
-          </button>
+          <Tooltip content="Reset build state if out of sync">
+            <button
+              onClick={handleResetBuild}
+              className="text-xs text-primary/60 hover:text-primary flex items-center gap-1"
+            >
+              <X size={12} />
+              Reset
+            </button>
+          </Tooltip>
         </div>
       )}
 
@@ -847,7 +927,7 @@ export default function App() {
       >
         <SortableContext items={featureIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-4">
-            {features.map((feature) => (
+            {activeFeatures.map((feature) => (
               <FeatureSection
                 key={feature.id}
                 feature={feature}
@@ -863,6 +943,7 @@ export default function App() {
                 onTaskDelete={handleDelete}
                 onFeatureEdit={handleFeatureEdit}
                 onFeatureDelete={handleFeatureDelete}
+                onFeatureStatusChange={handleFeatureStatusChange}
                 onOpenRequirement={handleOpenRequirement}
               />
             ))}
@@ -917,37 +998,87 @@ export default function App() {
         </DragOverlay>
       </DndContext>
 
-      {/* Archive section for done tasks */}
-      {doneTasks.length > 0 && (
+      {/* Archive section for done tasks and features */}
+      {(doneTasks.length > 0 || doneFeatures.length > 0) && (
         <div className="mt-6 border-t border-neutral-200 pt-4">
-          <button
-            onClick={() => setArchiveExpanded(!archiveExpanded)}
-            className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 mb-3"
-            title={archiveExpanded ? "Hide completed tasks" : "Show completed tasks"}
-          >
-            {archiveExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <span>Done ({doneTasks.length})</span>
-          </button>
+          <Tooltip content={archiveExpanded ? "Hide completed items" : "Show completed items"}>
+            <button
+              onClick={() => setArchiveExpanded(!archiveExpanded)}
+              className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 mb-3"
+            >
+              {archiveExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              <span>Done ({doneFeatures.length > 0 ? `${doneFeatures.length} feature${doneFeatures.length > 1 ? 's' : ''}` : ''}{doneFeatures.length > 0 && doneTasks.length > 0 ? ', ' : ''}{doneTasks.length > 0 ? `${doneTasks.length} task${doneTasks.length > 1 ? 's' : ''}` : ''})</span>
+            </button>
+          </Tooltip>
           {archiveExpanded && (
             <>
               <div className="flex justify-end mb-2">
-                <button
-                  onClick={handleArchiveDone}
-                  className="text-xs text-neutral-500 hover:text-danger"
-                  title="Permanently delete all completed tasks"
-                >
-                  Delete all done
-                </button>
+                <Tooltip content="Permanently delete all completed tasks">
+                  <button
+                    onClick={handleArchiveDone}
+                    className="text-xs text-neutral-500 hover:text-danger"
+                  >
+                    Delete all done
+                  </button>
+                </Tooltip>
               </div>
-              <div className="opacity-60">
-                <TaskList
-                  tasks={doneTasks}
-                  onReorder={() => {}} // No reordering for done tasks
-                  onStatusChange={handleStatusChange}
-                  onTitleChange={handleTitleChange}
-                  onDescriptionChange={handleDescriptionChange}
-                  onDelete={handleDelete}
-                />
+              <div className="opacity-60 space-y-3">
+                {/* Done features (without individual done tasks - they'll appear in task groupings below if any) */}
+                {doneFeatures.filter(f => !doneTasksByFeature.has(f.id)).map((feature) => (
+                  <div key={feature.id} className="border border-neutral-200 rounded-lg p-3 bg-neutral-50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-neutral-600 line-through">{feature.title}</span>
+                      <span className="text-xs text-neutral-400">Feature complete</span>
+                      <Tooltip content="Reactivate feature">
+                        <button
+                          onClick={() => handleReactivateFeature(feature.id)}
+                          className="ml-auto text-xs text-neutral-400 hover:text-primary flex items-center gap-1"
+                        >
+                          <RotateCcw size={12} />
+                          <span>Reactivate</span>
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+                {/* Done tasks grouped by feature */}
+                {Array.from(doneTasksByFeature.entries()).map(([featureId, { feature, tasks: featureTasks }]) => (
+                  <div key={featureId} className="border border-neutral-200 rounded-lg overflow-hidden bg-neutral-50">
+                    {/* Feature header */}
+                    <div className="px-3 py-2 border-b border-neutral-200 bg-neutral-100">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-medium ${feature?.status === 'done' ? 'text-neutral-500 line-through' : 'text-neutral-600'}`}>
+                          {feature?.title || 'Ungrouped'}
+                        </span>
+                        {feature?.status === 'done' && (
+                          <span className="text-xs text-neutral-400">Feature complete</span>
+                        )}
+                        <span className="text-xs text-neutral-400 ml-auto">{featureTasks.length} done</span>
+                        {feature?.status === 'done' && (
+                          <Tooltip content="Reactivate feature">
+                            <button
+                              onClick={() => handleReactivateFeature(feature.id)}
+                              className="text-xs text-neutral-400 hover:text-primary flex items-center gap-1"
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                    {/* Tasks in this feature */}
+                    <div className="p-3">
+                      <TaskList
+                        tasks={featureTasks}
+                        onReorder={() => {}}
+                        onStatusChange={handleStatusChange}
+                        onTitleChange={handleTitleChange}
+                        onDescriptionChange={handleDescriptionChange}
+                        onDelete={handleDelete}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -993,6 +1124,14 @@ export default function App() {
           needsWhisperModel={voiceSetup.needsWhisperModel}
           platform={voiceSetup.platform}
           onClose={() => setVoiceSetup(null)}
+        />
+      )}
+
+      {reworkModal && (
+        <ReworkFeedbackModal
+          taskTitle={reworkModal.taskTitle}
+          onSubmit={handleReworkSubmit}
+          onCancel={handleReworkCancel}
         />
       )}
     </div>

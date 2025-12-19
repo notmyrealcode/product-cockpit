@@ -1,5 +1,7 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'ready-for-signoff' | 'done' | 'rework';
 export type TaskType = 'task' | 'bug';
+export type FeatureStatus = 'active' | 'done';
+export type ThoughtPartnerIntensity = 'minimal' | 'balanced' | 'deep-dive';
 
 export interface Task {
   id: string;
@@ -18,6 +20,7 @@ export interface Feature {
   title: string;
   description: string | null;
   requirement_path: string | null;
+  status: FeatureStatus;
   priority: number;
   created_at: string;
   updated_at: string;
@@ -93,6 +96,7 @@ export type WebviewMessage =
   | { type: 'updateFeature'; id: string; updates: Partial<Feature> }
   | { type: 'deleteFeature'; id: string }
   | { type: 'reorderFeatures'; featureIds: string[] }
+  | { type: 'markFeatureDone'; id: string }
   // Tasks
   | { type: 'addTask'; title: string; description?: string; featureId?: string; taskType?: TaskType }
   | { type: 'updateTask'; id: string; updates: Partial<Task> }
@@ -101,7 +105,7 @@ export type WebviewMessage =
   | { type: 'moveTask'; taskId: string; featureId: string | null }
   | { type: 'archiveDone' }
   // Requirements / Interview
-  | { type: 'startInterview'; scope: 'project' | 'new-feature' | 'task'; initialInput?: string }
+  | { type: 'startInterview'; scope: 'project' | 'new-feature' | 'task'; initialInput?: string; intensity?: ThoughtPartnerIntensity }
   | { type: 'answerQuestion'; questionId: string; answer: string }
   | { type: 'approveProposal'; editedRequirementDoc?: string; editedDesignChanges?: string; removedFeatureIndices?: number[]; removedTaskIndices?: number[] }
   | { type: 'rejectProposal'; feedback: string }

@@ -2,6 +2,7 @@ import initSqlJs, { Database } from 'sql.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SCHEMA } from './schema';
+import { runMigrations } from './migrations';
 
 let db: Database | null = null;
 let dbPath: string | null = null;
@@ -31,6 +32,11 @@ export async function initDatabase(workspaceRoot: string): Promise<Database> {
     } else {
         db = new SQL.Database();
         db.run(SCHEMA);
+    }
+
+    // Run any pending migrations (works for both new and existing databases)
+    const applied = runMigrations(db);
+    if (applied.length > 0 || !fs.existsSync(dbPath)) {
         saveDatabase();
     }
 
