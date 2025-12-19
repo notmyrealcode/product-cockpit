@@ -5,6 +5,11 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Load .env file if it exists (for VSCE_PAT)
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -43,9 +48,20 @@ case $action in
         ;;
 esac
 
-# If publishing, ask about pre-release
+# If publishing, check for PAT and ask about pre-release
 PRE_RELEASE=""
 if [ "$DO_PUBLISH" = true ]; then
+    # Check for VSCE_PAT
+    if [ -z "$VSCE_PAT" ]; then
+        echo ""
+        echo -e "${YELLOW}No VSCE_PAT found in environment or .env file.${NC}"
+        echo "Create a .env file with: VSCE_PAT=your_token_here"
+        echo "Or export VSCE_PAT in your shell."
+        echo ""
+        read -p "Enter your Personal Access Token (or Ctrl+C to cancel): " VSCE_PAT
+        export VSCE_PAT
+    fi
+
     echo ""
     echo "Publish as:"
     echo "  1) Pre-release (unlisted, won't appear in search)"
@@ -77,14 +93,10 @@ if [ "$DO_PUBLISH" = true ]; then
     fi
 fi
 
-# Build
+# Build (vsce package runs vscode:prepublish automatically, so we don't need to compile first)
 if [ "$DO_BUILD" = true ]; then
     echo ""
-    echo -e "${BLUE}Compiling TypeScript...${NC}"
-    npm run compile
-
-    echo ""
-    echo -e "${BLUE}Packaging extension...${NC}"
+    echo -e "${BLUE}Packaging extension (includes compilation)...${NC}"
     npx @vscode/vsce package --no-dependencies
 
     echo ""
