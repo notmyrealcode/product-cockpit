@@ -1,13 +1,17 @@
 #!/bin/bash
-# Build the Shepherd extension
+# Build and package the Shepherd extension for distribution
 
 set -e
 
 cd "$(dirname "$0")/.."
 
-echo "Building extension..."
+echo "Compiling TypeScript..."
 npm run compile
 
 echo ""
-echo "Done! Extension built successfully."
-echo "Press F5 in VS Code to run the extension."
+echo "Packaging extension..."
+npx @vscode/vsce package --no-dependencies
+
+echo ""
+echo "Done! Extension packaged successfully."
+ls -la *.vsix 2>/dev/null || echo "No .vsix file found"
