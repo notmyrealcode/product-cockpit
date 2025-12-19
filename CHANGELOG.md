@@ -9,6 +9,11 @@ All notable changes to Shepherd will be documented in this file.
 - Mark feature as done - marks the feature and all its tasks as done in one click
 - Thought partner intensity selector (Minimal/Balanced/Deep Dive) for interview customization
 - Database migration system for seamless extension updates
+- Added ability to provide details about rework needed for a task
+
+### Changed
+
+- Rework feedback now appears at top of task descriptions so LLMs see it first
 
 ## [0.0.5] - 2025-12-18
 

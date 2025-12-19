@@ -50,46 +50,13 @@ describe('Feature', () => {
 ## TECH.md Guidelines
 Update for: new components, data flow changes, external APIs. Skip: bug fixes, troubleshooting, changelogs. Be concise - one example beats three verbose ones.
 
-
-
-## Project Status
-
-This project is in the requirements/planning phase. The `docs/pm-cockpit-requirements.md` file contains the full specification including user stories, data models, and implementation milestones.
-
 ## Technical Stack
 
 - **Extension:** TypeScript, VS Code Extension API
+- **UI:** React 18, Tailwind CSS v4, @dnd-kit
 - **Storage:** SQLite via sql.js (`.shepherd/data.db`)
-- **MCP Server:** TypeScript
-- **Voice Transcription:** whisper.cpp (local)
-- **Requirements Storage:** Markdown files in `docs/requirements/`
+- **MCP Server:** TypeScript (stdio server proxying to HTTP bridge)
+- **Voice:** whisper.cpp (local transcription)
 - **Testing:** Vitest
 
-## Architecture
-
-### Data Storage
-- `.shepherd/data.db` - SQLite database (sql.js)
-- `.shepherd/mcp-server.js` - MCP server
-- `docs/requirements/` - Requirement markdown files
-- `.mcp.json` - MCP server configuration
-
-### MCP Tools to Implement
-- `get_next_task` - Returns highest-priority todo task
-- `get_task` - Returns task by ID
-- `update_task_status` - Updates task status
-- `create_task` - Creates new task
-- `create_requirement` - Saves requirement file
-- `complete_interview` - Signals interview completion
-- `list_requirements` - Lists all requirement files
-- `get_requirements_path` - Returns requirements folder path
-- `get_task_requirement` - Returns requirement path for task
-
-### Task Statuses
-`todo` | `in-progress` | `ready-for-signoff` | `done` | `rework`
-
-## Implementation Milestones
-
-1. **M1: Core Task Management** - UI for task CRUD, drag-to-prioritize, JSON persistence
-2. **M2: MCP Integration** - MCP server, Claude Code task tools, signal file notifications
-3. **M3: Requirements Workflow** - Interview flow, requirements list, task linking
-4. **M4: Voice Capture** - Audio recording, local transcription, headless parsing
+See `docs/TECH.md` for full architecture details.

@@ -1,9 +1,10 @@
 /**
- * Formats rework feedback and appends it to the existing task description.
+ * Formats rework feedback and prepends it to the existing task description.
+ * Rework feedback is placed at the top so LLMs see it first when reading the task.
  *
  * @param existingDescription - The current task description (may be empty)
- * @param feedback - The rework feedback to append
- * @returns The updated description with formatted rework section
+ * @param feedback - The rework feedback to prepend
+ * @returns The updated description with formatted rework section at the top
  */
 export function formatReworkDescription(
   existingDescription: string | null | undefined,
@@ -20,13 +21,13 @@ export function formatReworkDescription(
     minute: '2-digit',
   });
 
-  const reworkSection = `---
-**Rework requested** (${formattedDate} ${formattedTime}):
-${feedback.trim()}`;
+  const reworkSection = `**Rework requested** (${formattedDate} ${formattedTime}):
+${feedback.trim()}
+---`;
 
   if (!existingDescription || existingDescription.trim() === '') {
     return reworkSection;
   }
 
-  return `${existingDescription.trim()}\n\n${reworkSection}`;
+  return `${reworkSection}\n\n${existingDescription.trim()}`;
 }

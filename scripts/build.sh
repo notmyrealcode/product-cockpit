@@ -144,6 +144,26 @@ case $action in
         ;;
 esac
 
+# For build/publish operations, ask about version bump first
+if [ "$DO_BUILD" = true ] || [ "$DO_PUBLISH" = true ]; then
+    CURRENT_VERSION=$(node -p "require('./package.json').version")
+    echo ""
+    echo -e "Current version: ${YELLOW}${CURRENT_VERSION}${NC}"
+    read -p "Increment version before proceeding? [y/N]: " do_bump
+    if [[ "$do_bump" =~ ^[Yy]$ ]]; then
+        if bump_version; then
+            echo ""
+        else
+            echo ""
+            read -p "Continue without version bump? [y/N]: " continue_anyway
+            if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+                echo "Cancelled."
+                exit 0
+            fi
+        fi
+    fi
+fi
+
 # If publishing, check for PAT and ask about pre-release
 PRE_RELEASE=""
 if [ "$DO_PUBLISH" = true ]; then
