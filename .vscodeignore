@@ -35,3 +35,4 @@ docs/**
 # Package files
 package-lock.json
 *.vsix
+.env
