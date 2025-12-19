@@ -79,14 +79,38 @@ Standalone stdio server spawned by Claude Code. Reads port file, proxies JSON-RP
 Centralized LLM prompts and JSON schemas for interview and task parsing.
 
 **Interview Scopes:**
-- `project` - Full project requirements
-- `new-feature` - Single feature for existing app
+- `project` - Full project requirements (multiple features allowed, consolidation encouraged)
+- `new-feature` - Single feature for existing app (exactly ONE feature enforced)
 - `task` - Quick task definition
 
 **Intensity Modes:**
 - `minimal` - Skip to proposal unless blocked
 - `balanced` - Default questioning behavior
 - `deep-dive` - Thorough exploration of edge cases
+
+### Prompt Engineering Techniques
+
+Techniques applied to enforce LLM compliance with constraints (based on Claude docs and research):
+
+| Technique | Purpose | Example |
+|-----------|---------|---------|
+| XML tags | Structure constraints clearly | `<single_feature_requirement>...</single_feature_requirement>` |
+| Authority framing | Make rules feel non-negotiable | "SYSTEM REQUIREMENT:" |
+| Social proof | Normalize desired behavior | "This is how it works in this system:" |
+| Positive examples only | Avoid teaching wrong patterns | Show only correct JSON structure, no "WRONG" examples |
+| Output priming | Guide exact format | Full JSON example with correct structure |
+| Verification step | Force self-check before output | "Before generating, verify: features.length === 1" |
+
+**Key insight:** LLMs pay close attention to examples. Showing "WRONG" examples (even labeled as wrong) can teach the undesired pattern. Only show correct examples.
+
+**Feature Consolidation Rules:**
+- `new-feature` scope: `features.length === 1` (strict)
+- `project` scope: Minimize features, consolidate related functionality
+- Rationale: Each feature is built by an LLM that needs ALL related work in one context
+
+**Sources:**
+- [Claude 4.x Best Practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-4-best-practices)
+- [Superpowers blog](https://blog.fsck.com/2025/10/09/superpowers/) - Cialdini's persuasion principles work on LLMs
 
 ## UI Architecture
 
