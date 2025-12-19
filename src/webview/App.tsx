@@ -566,7 +566,7 @@ export default function App() {
             className="absolute inset-0 bg-neutral-900/60"
             onClick={() => setSettingsOpen(false)}
           />
-          <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-72">
+          <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-full max-w-[280px] mx-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-neutral-800">Settings</h3>
               <button
@@ -644,7 +644,7 @@ export default function App() {
             className="absolute inset-0 bg-neutral-900/60"
             onClick={() => setAboutOpen(false)}
           />
-          <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-80">
+          <div className="relative bg-neutral-0 rounded-lg shadow-lg p-4 w-full max-w-[300px] mx-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <img src={shepherdLogo} alt="Shepherd" className="h-5 w-5" />

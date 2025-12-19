@@ -76,7 +76,7 @@ export function AddMenu({
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-64 bg-neutral-0 border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+        <div className="absolute right-0 mt-1 w-56 bg-neutral-0 border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
           {/* Interactive section (with Claude) */}
           <div className="px-2 py-1">
             <p className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide px-2 mb-1">

@@ -29,8 +29,8 @@ export function VoiceSetupModal({
   const needsCliTools = needsSox || needsWhisperBinary;
 
   return (
-    <div className="fixed inset-0 bg-neutral-900/60 flex items-center justify-center z-50">
-      <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg shadow-lg w-full max-w-md mx-4">
+    <div className="fixed inset-0 bg-neutral-900/60 flex items-center justify-center z-50 p-2">
+      <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg shadow-lg w-full max-w-sm">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-700">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">
