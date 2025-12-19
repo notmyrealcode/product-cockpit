@@ -2,7 +2,7 @@
 
 All notable changes to Shepherd will be documented in this file.
 
-## [0.0.4] - 2025-12-18
+## [0.0.5] - 2025-12-18
 
 ### Fixed
 
@@ -12,6 +12,7 @@ All notable changes to Shepherd will be documented in this file.
 - Simple task creation auto-approves without opening review panel
 - Whisper model auto-detection works across workspaces
 - Proposal rejection continues the interview correctly
+- Show helpful message when no workspace is open instead of non-functional UI
 
 ### Added
 
