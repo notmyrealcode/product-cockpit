@@ -28,7 +28,7 @@ import { RecordButton } from './components/RecordButton';
 import { Toast, ToastType } from './components/Toast';
 import { VoiceSetupModal } from './components/VoiceSetupModal';
 import { Button } from './components/ui';
-import { Play, ChevronDown, ChevronRight, X, Settings, Info } from 'lucide-react';
+import { Play, ChevronDown, ChevronRight, X, Settings, Info, ExternalLink } from 'lucide-react';
 
 // Shepherd logo
 import shepherdLogo from './assets/logo.png';
@@ -538,6 +538,13 @@ export default function App() {
             <h1 className="text-xl font-semibold text-neutral-800">Shepherd</h1>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => vscode.postMessage({ type: 'openTestPanel' })}
+              className="p-1.5 text-neutral-400 hover:text-primary hover:bg-primary/10 rounded"
+              title="Test Panel (dev)"
+            >
+              <ExternalLink size={16} />
+            </button>
             <button
               onClick={() => setAboutOpen(!aboutOpen)}
               className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded"

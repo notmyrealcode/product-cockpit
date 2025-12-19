@@ -264,6 +264,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'downloadModel':
                         await this.handleDownloadModel();
                         break;
+                    case 'openTestPanel':
+                        this.openTestPanel();
+                        break;
                     case 'buildTasks':
                         await this.handleBuildTasks(message.taskIds);
                         break;
@@ -865,6 +868,55 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             console.error('[WebviewProvider] handleDownloadModel error:', error);
             throw error;
         }
+    }
+
+    private openTestPanel(): void {
+        const panel = vscode.window.createWebviewPanel(
+            'shepherd.proposalView',
+            'Proposal Review',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                localResourceRoots: [this.extensionUri]
+            }
+        );
+
+        // Simple test HTML for now
+        panel.webview.html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {
+                        font-family: var(--vscode-font-family);
+                        padding: 20px;
+                        color: var(--vscode-foreground);
+                        background: var(--vscode-editor-background);
+                    }
+                    h1 { color: var(--vscode-textLink-foreground); }
+                    .card {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        border-radius: 8px;
+                        padding: 16px;
+                        margin: 16px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>🎉 Proposal Review Panel</h1>
+                <p>This panel opened from the sidebar webview!</p>
+                <div class="card">
+                    <h3>Test Content</h3>
+                    <p>This is where the full proposal review UI would go.</p>
+                    <ul>
+                        <li>Design Guide diff view</li>
+                        <li>Features & Tasks list</li>
+                        <li>Accept / Modify controls</li>
+                    </ul>
+                </div>
+            </body>
+            </html>
+        `;
     }
 
     private buildInProgress = false;
