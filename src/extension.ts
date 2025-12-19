@@ -15,7 +15,26 @@ let httpBridge: HttpBridge | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    // Register command to open walkthrough (always available, even without workspace)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shepherd.openWalkthrough', () => {
+            console.log('[Shepherd] openWalkthrough command called');
+            vscode.commands.executeCommand(
+                'workbench.action.openWalkthrough',
+                'JustinEckhouse.shepherd#shepherd.welcome',
+                false
+            );
+        })
+    );
+
+    // If no workspace, show message and return
     if (!workspaceRoot) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand('shepherd.initialize', () => {
+                vscode.window.showWarningMessage('Please open a folder or workspace to use Shepherd.');
+            })
+        );
         return;
     }
 
@@ -24,7 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
     await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.voiceDone', false);
     await vscode.commands.executeCommand('setContext', 'shepherd.walkthrough.taskCreated', false);
 
-    // Register initialize command (always available)
+    // Register initialize command (needs workspace)
     context.subscriptions.push(
         vscode.commands.registerCommand('shepherd.initialize', async () => {
             console.log('[Shepherd] Initialize command called');
@@ -47,17 +66,6 @@ export async function activate(context: vscode.ExtensionContext) {
                     );
                 }, 300);
             }
-        })
-    );
-
-    // Register command to open walkthrough
-    context.subscriptions.push(
-        vscode.commands.registerCommand('shepherd.openWalkthrough', () => {
-            vscode.commands.executeCommand(
-                'workbench.action.openWalkthrough',
-                'JustinEckhouse.shepherd#shepherd.welcome',
-                false
-            );
         })
     );
 
