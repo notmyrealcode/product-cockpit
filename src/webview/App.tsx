@@ -710,14 +710,19 @@ export default function App() {
       <div className="flex justify-end mb-4">
         <AddMenu
           onAddTask={() => {
+            setShowAddFeature(false);
             setAddTaskType('task');
             setShowAddTask(true);
           }}
           onAddBug={() => {
+            setShowAddFeature(false);
             setAddTaskType('bug');
             setShowAddTask(true);
           }}
-          onAddFeature={() => setShowAddFeature(true)}
+          onAddFeature={() => {
+            setShowAddTask(false);
+            setShowAddFeature(true);
+          }}
           onInterviewTask={() => handleShowInterviewModal('task')}
           onInterviewFeature={() => handleShowInterviewModal('new-feature')}
           onInterviewProject={() => handleShowInterviewModal('project')}
@@ -750,7 +755,8 @@ export default function App() {
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-medium text-neutral-600">New Feature</span>
           </div>
-          <div className="flex gap-2">
+          {/* Input row */}
+          <div className="flex gap-1.5">
             <RecordButton
               onTranscript={(text) => setNewFeatureTitle(text.slice(0, 100))}
               size="sm"
@@ -760,18 +766,21 @@ export default function App() {
               value={newFeatureTitle}
               onChange={(e) => setNewFeatureTitle(e.target.value)}
               placeholder="Feature name..."
-              className="flex-1 text-sm bg-neutral-0 border border-neutral-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 min-w-0 text-sm bg-neutral-0 border border-neutral-300 rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAddFeature();
                 if (e.key === 'Escape') setShowAddFeature(false);
               }}
             />
-            <Button size="sm" onClick={handleAddFeature} disabled={!newFeatureTitle.trim()}>
-              Add
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowAddFeature(false)}>
+          </div>
+          {/* Buttons row */}
+          <div className="flex gap-1.5 mt-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setShowAddFeature(false)} className="h-8 px-2 text-xs">
               Cancel
+            </Button>
+            <Button size="sm" onClick={handleAddFeature} disabled={!newFeatureTitle.trim()} className="h-8 px-3 text-xs">
+              Add
             </Button>
           </div>
         </div>
