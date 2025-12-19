@@ -103,9 +103,8 @@ export default function App() {
 
   // Refs to access current state in event handlers (avoid stale closures)
   const interviewScopeRef = useRef(interviewScope);
-  const interviewMessagesRef = useRef(interviewMessages);
+  const questionsReceivedRef = useRef(false);  // Track if any questions were asked
   useEffect(() => { interviewScopeRef.current = interviewScope; }, [interviewScope]);
-  useEffect(() => { interviewMessagesRef.current = interviewMessages; }, [interviewMessages]);
 
   // Current question is first in queue
   const currentQuestion = questionQueue.length > 0 ? questionQueue[0] : null;
@@ -222,6 +221,7 @@ export default function App() {
           setInterviewMessages([]);
           setQuestionQueue([]);
           setPendingAnswers(new Map());
+          questionsReceivedRef.current = false;  // Reset for new interview
           setCurrentProposal(null);
           setInterviewError(null);
           setInterviewThinking(true);
@@ -241,6 +241,7 @@ export default function App() {
         case 'interviewQuestion':
           // Add to queue instead of replacing
           setQuestionQueue(prev => [...prev, message.question]);
+          questionsReceivedRef.current = true;  // Track that questions were asked
           setInterviewThinking(false);
           break;
         case 'interviewThinking':
@@ -249,8 +250,7 @@ export default function App() {
         case 'interviewProposal':
           // For task scope with no questions asked, auto-approve immediately
           // Use refs to get current values (avoid stale closure)
-          const hasAssistantMessages = interviewMessagesRef.current.some(m => m.role === 'assistant');
-          if (interviewScopeRef.current === 'task' && !hasAssistantMessages) {
+          if (interviewScopeRef.current === 'task' && !questionsReceivedRef.current) {
             // Auto-create the task without showing the modal
             setInterviewActive(false);
             setInterviewAwaitingInput(false);
@@ -381,6 +381,7 @@ export default function App() {
     setQuestionQueue([]);
     setPendingAnswers(new Map());
     setCurrentProposal(null);
+    questionsReceivedRef.current = false;  // Reset for new interview
     setInterviewError(null);
   };
 

@@ -460,11 +460,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                     options: response.options as string[] | undefined,
                 };
                 this.retryCount = 0;  // Valid response, reset retry counter
-
-                // Add assistant message to indicate Claude asked a question
-                // This ensures hasAssistantMessages check works correctly
-                this.addAssistantMessage(question.text);
-
+                // Note: We don't add questions as messages since the UI displays them separately
                 this.callbacks?.onQuestion(question);
                 break;
             }
@@ -481,11 +477,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
                     break;
                 }
                 this.retryCount = 0;  // Valid response, reset retry counter
-
-                // Add assistant message to indicate Claude asked questions
-                // This ensures hasAssistantMessages check works correctly
-                const questionTexts = rawQuestions.map(q => q.text).join('\n\n');
-                this.addAssistantMessage(questionTexts);
+                // Note: We don't add questions as messages since the UI displays them separately
 
                 for (const q of rawQuestions) {
                     const question: InterviewQuestion = {
