@@ -4,6 +4,8 @@ node_modules/
 .vscode-test/
 test-workspace/
 .env
+.DS_Store
+.mcp.json
 
 # Shepherd runtime data
 .shepherd/
