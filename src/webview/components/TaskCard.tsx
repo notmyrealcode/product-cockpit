@@ -172,127 +172,74 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
           </div>
         </div>
       ) : (
-        /* View mode */
-        <div className="flex items-start gap-3">
-          {/* Selection checkbox */}
-          {onSelect && (
-            <input
-              type="checkbox"
-              checked={selected || false}
-              onChange={(e) => onSelect(task.id, e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer"
-              aria-label="Select task"
-            />
-          )}
-
-          {/* Drag handle */}
-          <button
-            {...attributes}
-            {...listeners}
-            className="mt-0.5 cursor-grab text-neutral-300 hover:text-neutral-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-            aria-label="Drag to reorder"
-          >
-            <GripVertical size={18} />
-          </button>
-
-          {/* Main content */}
-          <div className="flex-1 min-w-0">
-            {/* Task title */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">
-                {task.type === 'bug' ? 'Bug' : 'Task'}
-              </span>
-              {task.type === 'bug' && (
-                <Bug size={14} className="text-danger flex-shrink-0" />
-              )}
-              <p
-                className="text-sm font-semibold text-neutral-800 leading-snug cursor-pointer hover:text-primary"
-                onClick={handleStartEdit}
-              >
-                {task.title}
-              </p>
-              <span className="text-[10px] font-mono text-neutral-400">
-                #{task.id.slice(0, 4)}
-              </span>
-            </div>
-
-            {/* Task description - collapsed by default */}
-            {task.description ? (
-              <p
-                className={cn(
-                  "text-xs leading-relaxed text-neutral-600 mt-1 cursor-pointer hover:text-neutral-800",
-                  !isDescriptionExpanded && "line-clamp-1"
-                )}
-                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                title={isDescriptionExpanded ? "Click to collapse" : "Click to expand"}
-              >
-                {task.description}
-              </p>
-            ) : (
-              <p
-                className="text-xs leading-relaxed mt-1 cursor-pointer text-neutral-400 italic hover:text-neutral-500"
-                onClick={handleStartEdit}
-                title="Click to add description"
-              >
-                Add description...
-              </p>
+        /* View mode - responsive layout */
+        <div className="space-y-2">
+          {/* Top row: checkbox, drag handle, title */}
+          <div className="flex items-start gap-2">
+            {/* Selection checkbox */}
+            {onSelect && (
+              <input
+                type="checkbox"
+                checked={selected || false}
+                onChange={(e) => onSelect(task.id, e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer shrink-0"
+                aria-label="Select task"
+              />
             )}
+
+            {/* Drag handle */}
+            <button
+              {...attributes}
+              {...listeners}
+              className="mt-0.5 cursor-grab text-neutral-300 hover:text-neutral-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded shrink-0"
+              aria-label="Drag to reorder"
+            >
+              <GripVertical size={16} />
+            </button>
+
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              {/* Type badge + title */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={cn(
+                  "text-[10px] font-medium uppercase tracking-wide shrink-0",
+                  task.type === 'bug' ? "text-danger" : "text-neutral-400"
+                )}>
+                  {task.type === 'bug' ? 'Bug' : 'Task'}
+                </span>
+                <p
+                  className="text-sm font-semibold text-neutral-800 leading-snug cursor-pointer hover:text-primary break-words"
+                  onClick={handleStartEdit}
+                >
+                  {task.title}
+                </p>
+              </div>
+
+              {/* Task description - collapsed by default */}
+              {task.description && (
+                <p
+                  className={cn(
+                    "text-xs leading-relaxed text-neutral-600 mt-1 cursor-pointer hover:text-neutral-800",
+                    !isDescriptionExpanded && "line-clamp-2"
+                  )}
+                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                  title={isDescriptionExpanded ? "Click to collapse" : "Click to expand"}
+                >
+                  {task.description}
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Right column: action buttons + status */}
-          <div className="flex flex-col items-end gap-2 -mr-1 -mt-1">
-            {/* Action buttons */}
-            <div className="flex items-center gap-1">
-              {onBuild && (
-                <Tooltip content={buildDisabled ? "Build in progress..." : "Send to Claude Code"}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onBuild(task.id)}
-                    disabled={buildDisabled}
-                    className={cn(
-                      "h-8 w-8",
-                      buildDisabled
-                        ? "text-neutral-200 cursor-not-allowed"
-                        : "text-neutral-300 hover:text-success hover:bg-success/10"
-                    )}
-                    aria-label="Build with Claude"
-                  >
-                    <Play size={14} />
-                  </Button>
-                </Tooltip>
-              )}
-              <Tooltip content="Edit">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleStartEdit}
-                  className="h-8 w-8 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100"
-                  aria-label="Edit task"
-                >
-                  <Pencil size={14} />
-                </Button>
-              </Tooltip>
-              <Tooltip content="Delete">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDelete(task.id)}
-                  className="h-8 w-8 text-neutral-300 hover:text-danger hover:bg-danger/10"
-                  aria-label="Delete task"
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </Tooltip>
-            </div>
-
-            {/* Status dropdown - under action buttons */}
+          {/* Bottom row: status + actions */}
+          <div className="flex items-center justify-between pl-6">
+            {/* Status dropdown */}
             <div className="relative inline-flex items-center">
               <select
                 value={task.status}
                 onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
                 className={cn(
-                  'text-[11px] font-medium rounded-full pl-2.5 pr-7 py-1 border cursor-pointer',
+                  'text-[10px] font-medium rounded-full pl-2 pr-6 py-0.5 border cursor-pointer',
                   'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
                   'transition-fast appearance-none',
                   statusColors[task.status]
@@ -305,9 +252,48 @@ export function TaskCard({ task, selected, buildDisabled, onSelect, onBuild, onS
                 ))}
               </select>
               <ChevronDown
-                size={12}
-                className="absolute right-2 pointer-events-none opacity-60"
+                size={10}
+                className="absolute right-1.5 pointer-events-none opacity-60"
               />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center">
+              {onBuild && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onBuild(task.id)}
+                  disabled={buildDisabled}
+                  className={cn(
+                    "h-7 w-7",
+                    buildDisabled
+                      ? "text-neutral-200 cursor-not-allowed"
+                      : "text-neutral-300 hover:text-success hover:bg-success/10"
+                  )}
+                  aria-label="Build with Claude"
+                >
+                  <Play size={12} />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleStartEdit}
+                className="h-7 w-7 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100"
+                aria-label="Edit task"
+              >
+                <Pencil size={12} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDelete(task.id)}
+                className="h-7 w-7 text-neutral-300 hover:text-danger hover:bg-danger/10"
+                aria-label="Delete task"
+              >
+                <Trash2 size={12} />
+              </Button>
             </div>
           </div>
         </div>

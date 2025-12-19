@@ -84,6 +84,7 @@ export function AddTaskForm({
       onKeyDown={handleKeyDown}
       className={onCancel ? '' : 'mb-3 bg-neutral-0 border border-neutral-200 rounded-md p-2'}
     >
+      {/* Input row */}
       <div className="flex gap-1.5">
         {showRecord && (
           <RecordButton onTranscript={handleTranscript} size="sm" />
@@ -96,19 +97,23 @@ export function AddTaskForm({
           onFocus={handleTitleFocus}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="flex-1 min-w-0 bg-transparent border border-neutral-300 rounded px-3 py-2 text-sm font-medium text-neutral-800
+          className="flex-1 min-w-0 bg-transparent border border-neutral-300 rounded px-2 py-2 text-sm font-medium text-neutral-800
                      placeholder:text-neutral-400
                      focus:outline-none focus:ring-2 focus:ring-primary"
         />
-        <Button type="submit" size="sm" disabled={!title.trim()} className="shrink-0 h-9 px-3">
-          <Plus size={14} />
-          <span className="ml-1">Add</span>
-        </Button>
+      </div>
+
+      {/* Buttons row - separate line for narrow widths */}
+      <div className="flex gap-1.5 mt-2 justify-end">
         {onCancel && (
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="shrink-0 h-9 px-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-8 px-2 text-xs">
             Cancel
           </Button>
         )}
+        <Button type="submit" size="sm" disabled={!title.trim()} className="h-8 px-3 text-xs">
+          <Plus size={12} />
+          <span className="ml-1">Add</span>
+        </Button>
       </div>
 
       {isExpanded && (

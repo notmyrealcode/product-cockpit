@@ -112,151 +112,130 @@ export function FeatureSection({
       {/* Feature Header */}
       <div
         className={cn(
-          'flex items-center gap-2 px-3 py-2 bg-neutral-50 border-b border-neutral-200',
+          'px-3 py-2 bg-neutral-50 border-b border-neutral-200',
           !isUngrouped && 'cursor-pointer hover:bg-neutral-100'
         )}
         onClick={() => !isEditing && setIsExpanded(!isExpanded)}
       >
-        {/* Drag handle for features (not ungrouped) */}
-        {!isUngrouped && (
+        {/* Top row: drag, expand, title */}
+        <div className="flex items-center gap-1.5">
+          {/* Drag handle for features (not ungrouped) */}
+          {!isUngrouped && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="cursor-grab text-neutral-300 hover:text-neutral-500 focus:outline-none shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Drag to reorder"
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
+
+          {/* Expand/Collapse */}
           <button
-            {...attributes}
-            {...listeners}
-            className="cursor-grab text-neutral-300 hover:text-neutral-500 focus:outline-none"
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Drag to reorder"
+            className="text-neutral-400 hover:text-neutral-600 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
           >
-            <GripVertical size={16} />
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
-        )}
 
-        {/* Expand/Collapse */}
-        <button
-          className="text-neutral-400 hover:text-neutral-600"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsExpanded(!isExpanded);
-          }}
-        >
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </button>
+          {/* Title */}
+          {isEditing ? (
+            <div className="flex-1 flex items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="flex-1 min-w-0 text-sm font-semibold text-neutral-800 bg-neutral-0 border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveEdit();
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSaveEdit}
+                className="h-6 w-6 text-success hover:bg-success/10 shrink-0"
+              >
+                <Check size={12} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCancelEdit}
+                className="h-6 w-6 text-neutral-500 hover:text-neutral-700 shrink-0"
+              >
+                <X size={12} />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <span className="flex-1 min-w-0 text-sm font-semibold text-neutral-800 truncate">
+                {feature.title}
+              </span>
 
-        {/* Title */}
-        {isEditing ? (
-          <div className="flex-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="flex-1 text-sm font-semibold text-neutral-800 bg-neutral-0 border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveEdit();
-                if (e.key === 'Escape') handleCancelEdit();
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSaveEdit}
-              className="h-6 w-6 text-success hover:bg-success/10"
-            >
-              <Check size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCancelEdit}
-              className="h-6 w-6 text-neutral-500 hover:text-neutral-700"
-            >
-              <X size={14} />
-            </Button>
-          </div>
-        ) : (
-          <>
-            <span className="flex-1 text-sm font-semibold text-neutral-800 flex items-center gap-2">
-              {!isUngrouped && (
-                <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Feature</span>
-              )}
-              {feature.title}
-              {!isUngrouped && (
-                <span className="text-[10px] font-mono text-neutral-400">
-                  #{feature.id.slice(0, 4).toUpperCase()}
-                </span>
-              )}
-            </span>
+              {/* Task counts - compact */}
+              <span className="text-[10px] text-neutral-400 shrink-0">
+                {todoCount > 0 ? `${todoCount} todo` : tasks.length > 0 ? `${tasks.length}` : ''}
+              </span>
+            </>
+          )}
+        </div>
 
-            {/* Task counts */}
-            <span className="text-xs text-neutral-400">
-              {tasks.length === 0 ? 'empty' : (
-                <>
-                  {todoCount > 0 && <span>{todoCount} todo</span>}
-                  {todoCount > 0 && inProgressCount > 0 && ' • '}
-                  {inProgressCount > 0 && <span className="text-primary">{inProgressCount} in progress</span>}
-                  {todoCount === 0 && inProgressCount === 0 && `${tasks.length} tasks`}
-                </>
-              )}
-            </span>
-
-            {/* Action buttons */}
-            {!isUngrouped && (
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                {/* Requirement doc link */}
-                {feature.requirement_path && onOpenRequirement && (
-                  <Tooltip content="Open requirements">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onOpenRequirement(feature.requirement_path!)}
-                      className="h-7 w-7 text-neutral-400 hover:text-primary hover:bg-primary/10"
-                    >
-                      <FileText size={14} />
-                    </Button>
-                  </Tooltip>
-                )}
-                {onBuildFeature && tasks.length > 0 && (
-                  <Tooltip content={buildDisabled ? "Build in progress..." : "Build all tasks"}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onBuildFeature(feature.id)}
-                      disabled={buildDisabled}
-                      className={cn(
-                        'h-7 w-7',
-                        buildDisabled
-                          ? 'text-neutral-200 cursor-not-allowed'
-                          : 'text-neutral-400 hover:text-success hover:bg-success/10'
-                      )}
-                    >
-                      <Play size={14} />
-                    </Button>
-                  </Tooltip>
-                )}
-                <Tooltip content="Edit">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsEditing(true)}
-                    className="h-7 w-7 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
-                  >
-                    <Pencil size={14} />
-                  </Button>
-                </Tooltip>
-                {onFeatureDelete && (
-                  <Tooltip content="Delete">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onFeatureDelete(feature.id)}
-                      className="h-7 w-7 text-neutral-400 hover:text-danger hover:bg-danger/10"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </Tooltip>
-                )}
-              </div>
+        {/* Bottom row: action buttons (only for features, not ungrouped) */}
+        {!isUngrouped && !isEditing && (
+          <div className="flex items-center justify-end gap-0.5 mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
+            {feature.requirement_path && onOpenRequirement && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenRequirement(feature.requirement_path!)}
+                className="h-6 w-6 text-neutral-400 hover:text-primary hover:bg-primary/10"
+              >
+                <FileText size={12} />
+              </Button>
             )}
-          </>
+            {onBuildFeature && tasks.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onBuildFeature(feature.id)}
+                disabled={buildDisabled}
+                className={cn(
+                  'h-6 w-6',
+                  buildDisabled
+                    ? 'text-neutral-200 cursor-not-allowed'
+                    : 'text-neutral-400 hover:text-success hover:bg-success/10'
+                )}
+              >
+                <Play size={12} />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsEditing(true)}
+              className="h-6 w-6 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
+            >
+              <Pencil size={12} />
+            </Button>
+            {onFeatureDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onFeatureDelete(feature.id)}
+                className="h-6 w-6 text-neutral-400 hover:text-danger hover:bg-danger/10"
+              >
+                <Trash2 size={12} />
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
