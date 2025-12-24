@@ -8,6 +8,7 @@ import { InterviewService, InterviewProposal, InterviewQuestion, InterviewMessag
 import { ProjectContext } from '../context/ProjectContext';
 import { TASK_PARSER_PROMPT, TASK_PARSER_SCHEMA, type ThoughtPartnerIntensity } from '../prompts';
 import type { Task } from '../tasks/types';
+import { findClaudeBinary } from '../utils/claude';
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -1289,6 +1290,10 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             // Read prompt content for stdin
             const promptContent = await fs.promises.readFile(tmpFile, 'utf-8');
 
+            // Find claude binary (handles Windows PATH issues)
+            const claudeBinary = await findClaudeBinary();
+            console.log(`[PMCockpit] +${Date.now() - startTime}ms - Using claude binary: ${claudeBinary}`);
+
             // Spawn claude directly and pipe content via stdin (cross-platform)
             const stdout = await new Promise<string>((resolve, reject) => {
                 // --output-format json for structured output, --strict-mcp-config to skip MCP loading
@@ -1305,11 +1310,11 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     '--json-schema', taskSchema,
                     '-'
                 ];
-                console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: claude ${args.join(' ').slice(0, 100)}...`);
-                const proc = spawn('claude', args, {
+                console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: ${claudeBinary} ${args.join(' ').slice(0, 100)}...`);
+                const proc = spawn(claudeBinary, args, {
                     cwd: this.workspaceRoot,
                     env,
-                    shell: true  // Use shell to resolve 'claude' from PATH
+                    shell: true  // Use shell for command resolution
                 });
                 console.log(`[PMCockpit] +${Date.now() - startTime}ms - Process spawned`);
 

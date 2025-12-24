@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import { SessionRepo } from '../db/repositories/sessionRepo';
 import type { RequirementSession } from '../db/types';
 import { INTERVIEW_RESPONSE_SCHEMA, INTERVIEW_PROMPTS, INTENSITY_PROMPTS, type InterviewScope, type ThoughtPartnerIntensity } from '../prompts';
+import { findClaudeBinary } from '../utils/claude';
 
 export type { InterviewScope };
 
@@ -98,7 +99,7 @@ export class InterviewService {
         this.pendingRetry = false;
         this.retryCount = 0;
 
-        this.spawnClaudeProcess(false);  // false = new session, not resume
+        await this.spawnClaudeProcess(false);  // false = new session, not resume
 
         // Build context section if we have existing app info
         const contextSection = this.buildContextSection(context);
@@ -242,7 +243,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             }
         }
 
-        this.spawnClaudeProcess();
+        await this.spawnClaudeProcess();
 
         // Re-send conversation history to Claude
         if (this.messages.length > 0 && this.process?.stdin) {
@@ -256,7 +257,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         return true;
     }
 
-    private spawnClaudeProcess(isResume: boolean = false): void {
+    private async spawnClaudeProcess(isResume: boolean = false): Promise<void> {
         // Remove VS Code Claude env vars that might interfere
         const env = { ...process.env };
         delete env.CLAUDE_CODE_SSE_PORT;
@@ -305,11 +306,15 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
             this.log('Starting new Claude session:', this.claudeSessionId);
         }
 
+        // Find claude binary (handles Windows PATH issues)
+        const claudeBinary = await findClaudeBinary();
+        this.log('Using claude binary:', claudeBinary);
+
         // Spawn claude directly - works cross-platform
-        this.process = spawn('claude', args, {
+        this.process = spawn(claudeBinary, args, {
             cwd: this.workspaceRoot,
             env,
-            shell: true  // Use shell to resolve 'claude' from PATH
+            shell: true  // Use shell for command resolution
         });
 
         this.process.stdout?.on('data', (data) => this.handleStdout(data));
@@ -345,7 +350,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         this.continueConversation(`Please revise the proposal: ${feedback}`);
     }
 
-    private continueConversation(userMessage: string): void {
+    private async continueConversation(userMessage: string): Promise<void> {
         // Add user message to history and UI
         this.messages.push({ role: 'user', content: userMessage });
         this.callbacks?.onMessage({ role: 'user', content: userMessage });
@@ -362,7 +367,7 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         }
 
         // Resume the Claude session - it maintains conversation context
-        this.spawnClaudeProcess(true);  // true = resume mode
+        await this.spawnClaudeProcess(true);  // true = resume mode
 
         // Send message to Claude
         const stdin = this.process!.stdin;
