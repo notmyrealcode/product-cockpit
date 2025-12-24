@@ -127,6 +127,11 @@
             "Sonnet - More capable, slower",
             "Opus - Most capable, slowest"
           ]
+        },
+        "shepherd.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Claude CLI executable. Leave empty for auto-detection. On Windows, run 'where claude' in PowerShell to find the path."
         }
       }
     },
