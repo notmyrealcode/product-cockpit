@@ -2,6 +2,26 @@
 
 All notable changes to Shepherd will be documented in this file.
 
+## [0.0.11] - 2025-12-24
+
+### Added
+
+- Cross-platform support for Windows and Linux
+- Auto-detect JavaScript runtime (Node.js or Bun) for MCP server
+- Prompt to install runtime if neither is found, with platform-specific options:
+  - Windows: PowerShell script for Bun, or open nodejs.org
+  - macOS: Homebrew for Node.js (if available), or curl script for Bun
+  - Linux: curl script for Bun, or open nodejs.org
+- VS Code setting `shepherd.claudePath` for manual Claude CLI path configuration
+
+### Fixed
+
+- Fixed "Interview process exited with code -4058" error on Windows (ENOENT from hardcoded `/bin/zsh`)
+- Fixed JSON argument mangling on Windows by removing `shell: true` from spawn calls
+- Fixed Claude CLI not found on Windows by checking common installation paths
+- Fixed `which` command usage on Windows (now uses `where`)
+- Fixed SIGINT signal handling on Windows for audio recording
+
 ## [0.0.7] - 2025-12-19
 
 ### Added
