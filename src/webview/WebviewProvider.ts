@@ -1286,19 +1286,36 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const parserModel = vscode.workspace.getConfiguration('shepherd').get<string>('parserModel', 'haiku');
             console.log('[PMCockpit] Using parser model:', parserModel);
 
-            // Use spawn with login shell to get proper PATH
+            // Read prompt content for stdin
+            const promptContent = await fs.promises.readFile(tmpFile, 'utf-8');
+
+            // Spawn claude directly and pipe content via stdin (cross-platform)
             const stdout = await new Promise<string>((resolve, reject) => {
                 // --output-format json for structured output, --strict-mcp-config to skip MCP loading
                 // --tools "" to disable tools, --system-prompt to override default behavior
                 // --json-schema to enforce output structure (prompts from centralized file)
                 const taskSchema = JSON.stringify(TASK_PARSER_SCHEMA);
-                const cmd = `cat "${tmpFile}" | claude -p --model ${parserModel} --output-format json --strict-mcp-config --tools "" --system-prompt "${TASK_PARSER_PROMPT}" --json-schema '${taskSchema}' -`;
-                console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: ${cmd}`);
-                const proc = spawn('/bin/zsh', ['-l', '-c', cmd], {
+                const args = [
+                    '-p',
+                    '--model', parserModel,
+                    '--output-format', 'json',
+                    '--strict-mcp-config',
+                    '--tools', '',
+                    '--system-prompt', TASK_PARSER_PROMPT,
+                    '--json-schema', taskSchema,
+                    '-'
+                ];
+                console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: claude ${args.join(' ').slice(0, 100)}...`);
+                const proc = spawn('claude', args, {
                     cwd: this.workspaceRoot,
-                    env
+                    env,
+                    shell: true  // Use shell to resolve 'claude' from PATH
                 });
                 console.log(`[PMCockpit] +${Date.now() - startTime}ms - Process spawned`);
+
+                // Write prompt content to stdin and close it
+                proc.stdin?.write(promptContent);
+                proc.stdin?.end();
 
                 let output = '';
                 let errorOutput = '';

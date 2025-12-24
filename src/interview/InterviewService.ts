@@ -274,24 +274,42 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         this.log('Full prompt:\n', systemPrompt);
         this.log('===================================');
 
-        // Escape for shell
-        const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
-        const escapedSchema = JSON.stringify(INTERVIEW_RESPONSE_SCHEMA).replace(/'/g, "'\\''");
+        // Build args array for claude CLI (avoids shell quoting issues on Windows)
+        const schemaJson = JSON.stringify(INTERVIEW_RESPONSE_SCHEMA);
 
-        let cmd: string;
+        let args: string[];
         if (isResume && this.claudeSessionId) {
             // Resume existing session with JSON schema for structured output
-            cmd = `claude -p --resume ${this.claudeSessionId} --output-format json --json-schema '${escapedSchema}' --strict-mcp-config --tools "" -`;
+            args = [
+                '-p',
+                '--resume', this.claudeSessionId,
+                '--output-format', 'json',
+                '--json-schema', schemaJson,
+                '--strict-mcp-config',
+                '--tools', '',
+                '-'
+            ];
             this.log('Resuming Claude session:', this.claudeSessionId);
         } else {
             // New session with system prompt and JSON schema
-            cmd = `claude -p --session-id ${this.claudeSessionId} --output-format json --json-schema '${escapedSchema}' --strict-mcp-config --tools "" --system-prompt '${escapedPrompt}' -`;
+            args = [
+                '-p',
+                '--session-id', this.claudeSessionId!,
+                '--output-format', 'json',
+                '--json-schema', schemaJson,
+                '--strict-mcp-config',
+                '--tools', '',
+                '--system-prompt', systemPrompt,
+                '-'
+            ];
             this.log('Starting new Claude session:', this.claudeSessionId);
         }
 
-        this.process = spawn('/bin/zsh', ['-l', '-c', cmd], {
+        // Spawn claude directly - works cross-platform
+        this.process = spawn('claude', args, {
             cwd: this.workspaceRoot,
-            env
+            env,
+            shell: true  // Use shell to resolve 'claude' from PATH
         });
 
         this.process.stdout?.on('data', (data) => this.handleStdout(data));

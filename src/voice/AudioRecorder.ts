@@ -145,8 +145,13 @@ export class AudioRecorder {
                 }
             });
 
-            // Send SIGINT to gracefully stop recording
-            this.process!.kill('SIGINT');
+            // Send signal to gracefully stop recording
+            // On Windows, SIGINT isn't fully supported, but kill() works
+            if (process.platform === 'win32') {
+                this.process!.kill();
+            } else {
+                this.process!.kill('SIGINT');
+            }
         });
     }
 

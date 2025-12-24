@@ -314,7 +314,8 @@ export class WhisperService {
     }
 
     private async commandExists(command: string): Promise<boolean> {
-        const result = await this.exec('which', [command]);
+        const checkCmd = process.platform === 'win32' ? 'where' : 'which';
+        const result = await this.exec(checkCmd, [command]);
         return result.code === 0 && result.stdout.trim().length > 0;
     }
 
