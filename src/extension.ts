@@ -8,6 +8,7 @@ import { TaskWebviewProvider } from './webview/WebviewProvider';
 import { HttpBridge } from './http/bridge';
 import { initialize, isInitialized, updateMcpServer } from './init/initialize';
 import { initDatabase, closeDatabase } from './db';
+import { findRuntime, promptInstallRuntime } from './utils/runtime';
 
 const execAsync = promisify(exec);
 
@@ -173,6 +174,12 @@ async function activateExtension(context: vscode.ExtensionContext, workspaceRoot
         if (action === 'Install Claude Code') {
             vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/code'));
         }
+    }
+
+    // Check for JavaScript runtime (Node.js or Bun) for MCP server
+    const { found: hasRuntime } = await findRuntime();
+    if (!hasRuntime) {
+        await promptInstallRuntime();
     }
 
     // Update MCP server to latest version (safe - it's stateless)

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { findRuntime } from '../utils/runtime';
 
 const MCP_SERVER_TEMPLATE = `#!/usr/bin/env node
 const http = require('http');
@@ -253,8 +254,11 @@ async function mergeClaudeMcp(workspaceRoot: string): Promise<void> {
     }
 
     const mcpServers = (mcp.mcpServers as Record<string, unknown>) || {};
+
+    // Use detected runtime (node preferred, falls back to bun)
+    const { command: runtimeCommand } = await findRuntime();
     const expectedConfig = {
-        command: 'node',
+        command: runtimeCommand,
         args: ['.shepherd/mcp-server.js']
     };
 
