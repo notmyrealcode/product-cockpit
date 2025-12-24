@@ -1311,10 +1311,10 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     '-'
                 ];
                 console.log(`[PMCockpit] +${Date.now() - startTime}ms - Spawning: ${claudeBinary} ${args.join(' ').slice(0, 100)}...`);
+                // Don't use shell: true on Windows as it mangles JSON arguments
                 const proc = spawn(claudeBinary, args, {
                     cwd: this.workspaceRoot,
-                    env,
-                    shell: true  // Use shell for command resolution
+                    env
                 });
                 console.log(`[PMCockpit] +${Date.now() - startTime}ms - Process spawned`);
 

@@ -311,10 +311,10 @@ NOTE: If you propose visual/UI changes (colors, typography, spacing, UI patterns
         this.log('Using claude binary:', claudeBinary);
 
         // Spawn claude directly - works cross-platform
+        // Don't use shell: true on Windows as it mangles JSON arguments
         this.process = spawn(claudeBinary, args, {
             cwd: this.workspaceRoot,
-            env,
-            shell: true  // Use shell for command resolution
+            env
         });
 
         this.process.stdout?.on('data', (data) => this.handleStdout(data));
