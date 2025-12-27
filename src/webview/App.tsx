@@ -42,6 +42,11 @@ const PARSER_MODELS = [
   { id: 'opus', name: 'Opus', description: 'Most capable' },
 ];
 
+const DELIVERY_MODES = [
+  { id: 'new-terminal', name: 'New terminal', description: 'Default' },
+  { id: 'active-terminal', name: 'Active terminal', description: 'Your session' },
+];
+
 // Virtual feature for ungrouped tasks
 const UNGROUPED_FEATURE: Feature = {
   id: '__ungrouped__',
@@ -65,6 +70,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [parserModel, setParserModel] = useState('haiku');
+  const [taskDeliveryMode, setTaskDeliveryMode] = useState('new-terminal');
   const [showAddFeature, setShowAddFeature] = useState(false);
   const [newFeatureTitle, setNewFeatureTitle] = useState('');
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -212,6 +218,7 @@ export default function App() {
           break;
         case 'settingsLoaded':
           setParserModel(message.parserModel);
+          setTaskDeliveryMode(message.taskDeliveryMode);
           break;
         // Interview messages
         case 'interviewStarted':
@@ -501,6 +508,11 @@ export default function App() {
     vscode.postMessage({ type: 'setParserModel', model });
   };
 
+  const handleTaskDeliveryModeChange = (mode: string) => {
+    setTaskDeliveryMode(mode);
+    vscode.postMessage({ type: 'setTaskDeliveryMode', mode });
+  };
+
   const handleUpdateProject = (updates: Partial<Project>) => {
     vscode.postMessage({ type: 'updateProject', updates });
   };
@@ -708,6 +720,28 @@ export default function App() {
                   >
                     <span className="font-medium">{model.name}</span>
                     <span className="text-neutral-400 ml-2">{model.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-neutral-200 pt-4 mb-4">
+              <label className="text-xs font-medium text-neutral-600 mb-2 block">
+                Task Delivery Mode
+              </label>
+              <div className="space-y-1.5">
+                {DELIVERY_MODES.map(mode => (
+                  <button
+                    key={mode.id}
+                    onClick={() => handleTaskDeliveryModeChange(mode.id)}
+                    className={`w-full px-3 py-2 text-left text-xs rounded-md border transition-colors ${
+                      taskDeliveryMode === mode.id
+                        ? 'bg-primary/10 text-primary border-primary'
+                        : 'bg-neutral-0 text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                    }`}
+                  >
+                    <span className="font-medium">{mode.name}</span>
+                    <span className="text-neutral-400 ml-2">{mode.description}</span>
                   </button>
                 ))}
               </div>

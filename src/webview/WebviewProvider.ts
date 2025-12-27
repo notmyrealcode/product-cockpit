@@ -289,6 +289,9 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     case 'setParserModel':
                         await this.setParserModel(message.model);
                         break;
+                    case 'setTaskDeliveryMode':
+                        await this.setTaskDeliveryMode(message.mode);
+                        break;
                 }
             } catch (error) {
                 vscode.window.showErrorMessage(`Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -332,6 +335,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             const tasks = this.taskStore.getTasks();
             const requirements = await this.getRequirements();
             const parserModel = vscode.workspace.getConfiguration('shepherd').get<string>('parserModel', 'haiku');
+            const taskDeliveryMode = vscode.workspace.getConfiguration('shepherd').get<string>('taskDeliveryMode', 'new-terminal');
             const extensionInfo = this.getExtensionInfo();
             log('Sending initialized with ' + tasks.length + ' tasks, ' + features.length + ' features');
             this._view.webview.postMessage({
@@ -344,13 +348,18 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             });
             this._view.webview.postMessage({
                 type: 'settingsLoaded',
-                parserModel
+                parserModel,
+                taskDeliveryMode
             });
         }
     }
 
     private async setParserModel(model: string): Promise<void> {
         await vscode.workspace.getConfiguration('shepherd').update('parserModel', model, vscode.ConfigurationTarget.Global);
+    }
+
+    private async setTaskDeliveryMode(mode: string): Promise<void> {
+        await vscode.workspace.getConfiguration('shepherd').update('taskDeliveryMode', mode, vscode.ConfigurationTarget.Global);
     }
 
     private async sendRequirements(): Promise<void> {
@@ -1077,57 +1086,97 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Track which tasks we're building
-        this.buildTaskIds = new Set(taskIds);
+        // Get delivery mode setting
+        const deliveryMode = vscode.workspace.getConfiguration('shepherd').get<string>('taskDeliveryMode', 'new-terminal');
 
-        // Watch for task status changes to detect completion
-        this.buildStatusListener?.dispose();
-        this.buildStatusListener = this.taskStore.onDidChange(() => {
-            this.checkBuildComplete();
-        });
-
-        // Reuse existing terminal or create new one
-        if (!this.buildTerminal) {
-            this.buildTerminal = vscode.window.createTerminal({
-                name: 'Claude Build',
-                cwd: this.workspaceRoot
-            });
-
-            // Watch for terminal close to clean up
-            const closeListener = vscode.window.onDidCloseTerminal(terminal => {
-                if (terminal === this.buildTerminal) {
-                    this.cleanupBuild();
-                    closeListener.dispose();
-                }
-            });
-            this._disposables.push(closeListener);
-        }
-
-        // Mark build as started
-        this.buildInProgress = true;
-        if (this._view) {
-            this._view.webview.postMessage({ type: 'buildStarted' });
-        }
-
-        // Simple prompt - Claude uses MCP tools to get details
+        // Build the prompt
         const ids = taskIds.join(', ');
         const prompt = taskIds.length === 1
             ? `Build task ${ids}. Use shepherd MCP tools to get details. Set status to ready-for-signoff when complete.`
             : `Build these tasks in order: ${ids}. Use shepherd MCP tools to get details. Set each task to ready-for-signoff when complete.`;
 
-        try {
-            // First, paste the command text without Enter
-            this.buildTerminal.sendText(`claude "${prompt}"`, false);
+        if (deliveryMode === 'active-terminal') {
+            // Active terminal mode - send raw prompt to focused terminal
+            const activeTerminal = vscode.window.activeTerminal;
+            if (!activeTerminal) {
+                vscode.window.showWarningMessage(
+                    'No active terminal found. Please focus a terminal with an active Claude session, or switch to "New terminal" mode in Settings.'
+                );
+                return;
+            }
 
-            // Small delay to ensure paste completes, then send Enter
-            await new Promise(resolve => setTimeout(resolve, 100));
-            this.buildTerminal.sendText('', true); // Send Enter key
+            // Track which tasks we're building
+            this.buildTaskIds = new Set(taskIds);
 
-            this.buildTerminal.show();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            vscode.window.showErrorMessage(`Failed to send build command: ${message}`);
-            this.cleanupBuild();
+            // Watch for task status changes to detect completion
+            this.buildStatusListener?.dispose();
+            this.buildStatusListener = this.taskStore.onDidChange(() => {
+                this.checkBuildComplete();
+            });
+
+            // Mark build as started
+            this.buildInProgress = true;
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'buildStarted' });
+            }
+
+            try {
+                // Send just the prompt text (no claude command wrapper)
+                activeTerminal.sendText(prompt, true);
+                activeTerminal.show();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown error';
+                vscode.window.showErrorMessage(`Failed to send to terminal: ${message}`);
+                this.cleanupBuild();
+            }
+        } else {
+            // New terminal mode - existing behavior
+            // Track which tasks we're building
+            this.buildTaskIds = new Set(taskIds);
+
+            // Watch for task status changes to detect completion
+            this.buildStatusListener?.dispose();
+            this.buildStatusListener = this.taskStore.onDidChange(() => {
+                this.checkBuildComplete();
+            });
+
+            // Reuse existing terminal or create new one
+            if (!this.buildTerminal) {
+                this.buildTerminal = vscode.window.createTerminal({
+                    name: 'Claude Build',
+                    cwd: this.workspaceRoot
+                });
+
+                // Watch for terminal close to clean up
+                const closeListener = vscode.window.onDidCloseTerminal(terminal => {
+                    if (terminal === this.buildTerminal) {
+                        this.cleanupBuild();
+                        closeListener.dispose();
+                    }
+                });
+                this._disposables.push(closeListener);
+            }
+
+            // Mark build as started
+            this.buildInProgress = true;
+            if (this._view) {
+                this._view.webview.postMessage({ type: 'buildStarted' });
+            }
+
+            try {
+                // First, paste the command text without Enter
+                this.buildTerminal.sendText(`claude "${prompt}"`, false);
+
+                // Small delay to ensure paste completes, then send Enter
+                await new Promise(resolve => setTimeout(resolve, 100));
+                this.buildTerminal.sendText('', true); // Send Enter key
+
+                this.buildTerminal.show();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown error';
+                vscode.window.showErrorMessage(`Failed to send build command: ${message}`);
+                this.cleanupBuild();
+            }
         }
     }
 

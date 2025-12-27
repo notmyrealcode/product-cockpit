@@ -85,7 +85,7 @@ export type ExtensionMessage =
   | { type: 'voiceError'; error: string }
   | { type: 'buildStarted' }
   | { type: 'buildEnded' }
-  | { type: 'settingsLoaded'; parserModel: string }
+  | { type: 'settingsLoaded'; parserModel: string; taskDeliveryMode: string }
   // Interview messages
   | { type: 'interviewStarted'; sessionId: string; scope: string }
   | { type: 'interviewMessage'; message: InterviewMessage }
@@ -129,4 +129,5 @@ export type WebviewMessage =
   | { type: 'buildTasks'; taskIds: string[] }
   | { type: 'resetBuild' }
   // Settings
-  | { type: 'setParserModel'; model: string };
+  | { type: 'setParserModel'; model: string }
+  | { type: 'setTaskDeliveryMode'; mode: string };
