@@ -2,6 +2,40 @@
 
 All notable changes to Shepherd will be documented in this file.
 
+## [0.0.17] - 2025-01-13
+
+### Added
+
+- Screenshots in README for VS Code marketplace listing
+
+## [0.0.16] - 2025-01-05
+
+### Fixed
+
+- MCP tool descriptions now mention "bugs" so Claude will update bug status (not just tasks)
+
+## [0.0.15] - 2025-01-05
+
+### Added
+
+- Add task button (+) in feature group headers for quick task creation within a feature
+- "Add title" expandable link in quick add form for optional titles
+
+### Changed
+
+- Quick add task/bug form is now description-first (description required, title optional)
+- Tasks can now have empty titles (no auto-generation from description)
+
+### Fixed
+
+- Feature name input text now displays in black instead of grey
+
+## [0.0.12] - 2025-01-04
+
+### Added
+
+- Task delivery mode setting (new terminal vs reuse terminal)
+
 ## [0.0.11] - 2025-12-24
 
 ### Added

@@ -76,6 +76,7 @@ export default function App() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [addTaskType, setAddTaskType] = useState<'task' | 'bug'>('task');
+  const [addTaskFeatureId, setAddTaskFeatureId] = useState<string | null>(null);
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -322,6 +323,12 @@ export default function App() {
 
   const handleAddTask = (title: string, description: string) => {
     vscode.postMessage({ type: 'addTask', title, description });
+  };
+
+  const handleAddTaskToFeature = (featureId: string) => {
+    setAddTaskFeatureId(featureId);
+    setShowAddTask(true);
+    setAddTaskType('task');
   };
 
   const handleReorder = (taskIds: string[]) => {
@@ -860,15 +867,23 @@ export default function App() {
           <div className="flex items-center gap-2 mb-2">
             <span className={`text-xs font-medium ${addTaskType === 'bug' ? 'text-danger' : 'text-neutral-600'}`}>
               New {addTaskType === 'bug' ? 'Bug' : 'Task'}
+              {addTaskFeatureId && (() => {
+                const feature = features.find(f => f.id === addTaskFeatureId);
+                return feature ? ` in "${feature.title}"` : '';
+              })()}
             </span>
           </div>
           <AddTaskForm
             onAdd={(title, description) => {
-              vscode.postMessage({ type: 'addTask', title, description, taskType: addTaskType });
+              vscode.postMessage({ type: 'addTask', title, description, taskType: addTaskType, featureId: addTaskFeatureId });
               setShowAddTask(false);
+              setAddTaskFeatureId(null);
             }}
-            onCancel={() => setShowAddTask(false)}
-            placeholder={addTaskType === 'bug' ? 'Bug title...' : 'Task title...'}
+            onCancel={() => {
+              setShowAddTask(false);
+              setAddTaskFeatureId(null);
+            }}
+            placeholder={addTaskType === 'bug' ? 'Describe the bug...' : 'Describe the task...'}
             showRecord
           />
         </div>
@@ -891,7 +906,7 @@ export default function App() {
               value={newFeatureTitle}
               onChange={(e) => setNewFeatureTitle(e.target.value)}
               placeholder="Feature name..."
-              className="flex-1 min-w-0 text-sm bg-neutral-0 border border-neutral-300 rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 min-w-0 text-sm text-neutral-800 bg-neutral-0 border border-neutral-300 rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAddFeature();
@@ -985,6 +1000,7 @@ export default function App() {
                 onFeatureDelete={handleFeatureDelete}
                 onFeatureStatusChange={handleFeatureStatusChange}
                 onOpenRequirement={handleOpenRequirement}
+                onAddTask={handleAddTaskToFeature}
               />
             ))}
 

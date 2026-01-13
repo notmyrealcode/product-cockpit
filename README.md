@@ -2,6 +2,8 @@
 
 A VS Code extension that helps product managers work with AI coding agents like Claude Code. Manage tasks, capture requirements through AI interviews, and use voice-to-task conversion—all from your IDE.
 
+![Task management in Shepherd](images/input.png)
+
 ## Features
 
 - **Task Management** — Create, prioritize, and track tasks with drag-and-drop reordering
@@ -36,12 +38,15 @@ A VS Code extension that helps product managers work with AI coding agents like 
 - Use **"New Feature (with Requirements)"** to start an AI interview
 - Use the **microphone** button to dictate tasks via voice
 
+
 ### Task Workflow
 
 1. Create tasks in the sidebar
 2. Drag to reorder priority (top = highest priority)
 3. Claude Code uses `get_next_task` to pick up work
 4. Tasks move through: `todo` → `in-progress` → `ready-for-signoff` → `done`
+
+![Adding a new task](images/tasks.png)
 
 ### Voice Capture
 
@@ -56,6 +61,13 @@ A VS Code extension that helps product managers work with AI coding agents like 
 2. Answer Claude's questions about the feature
 3. Review the generated requirements doc and tasks
 4. Approve to create everything automatically
+
+![Requirements refinement](images/refine.png)
+
+### Code It!
+![Claude Code integration](images/code.png)
+
+
 
 ## Known Limitations
 

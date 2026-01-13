@@ -197,7 +197,7 @@ export class TaskWebviewProvider implements vscode.WebviewViewProvider {
                     // Task handlers
                     case 'addTask':
                         this.taskStore.createTask({
-                            title: message.title,
+                            title: message.title || '',
                             description: message.description,
                             feature_id: message.featureId,
                             type: message.taskType
